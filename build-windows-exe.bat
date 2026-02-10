@@ -25,6 +25,9 @@ jpackage ^
   --vendor johnreah ^
   --java-options "-Dfile.encoding=UTF-8"
 
+rem Make executable writable
+attrib -R "target\dist\Mapster\Mapster.exe"
+
 if %ERRORLEVEL% EQU 0 (
     echo.
     echo ========================================

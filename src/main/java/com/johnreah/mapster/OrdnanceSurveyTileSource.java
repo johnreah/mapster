@@ -41,7 +41,7 @@ public class OrdnanceSurveyTileSource implements TileSource {
 
     @Override
     public int getMaxZoom() {
-        return 22;
+        return 20;
     }
 
     @Override

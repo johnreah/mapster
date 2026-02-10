@@ -80,6 +80,8 @@ public class App extends Application {
     private List<TileSource> buildAvailableSources() {
         List<TileSource> sources = new ArrayList<>();
         sources.add(new OsmTileSource());
+        sources.add(new GoogleStreetMapsTileSource());
+        sources.add(new GoogleSatelliteTileSource());
 
         OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource("Road_3857", "OS Road");
         if (osRoad.isAvailable()) {
