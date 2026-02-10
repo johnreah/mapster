@@ -25,3 +25,10 @@ replay_pid*
 
 # Maven
 target/
+
+# IDE
+.idea/
+.claude/
+
+# OS
+nul

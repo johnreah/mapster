@@ -4,21 +4,26 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.util.StringConverter;
+
+import java.util.List;
 
 public class MapView extends StackPane {
 
     private static final int TILE_SIZE = 256;
-    private static final int MIN_ZOOM = 0;
-    private static final int MAX_ZOOM = 19;
 
     private final Canvas canvas = new Canvas();
     private final TileCache tileCache;
+    private final Label attribution;
+    private final ComboBox<TileSource> sourceCombo = new ComboBox<>();
 
+    private TileSource tileSource;
     private double centerX;
     private double centerY;
     private int zoom;
@@ -26,13 +31,17 @@ public class MapView extends StackPane {
     private double dragStartX, dragStartY;
     private double dragStartCenterX, dragStartCenterY;
 
-    public MapView() {
+    private Runnable stateUpdateListener;
+
+    public MapView(TileSource tileSource) {
+        this.tileSource = tileSource;
+
         // Default view: London
         zoom = 10;
         centerX = TileMath.lonToTileX(-0.09, zoom);
         centerY = TileMath.latToTileY(51.505, zoom);
 
-        tileCache = new TileCache(this::render);
+        tileCache = new TileCache(tileSource, this::render);
 
         canvas.widthProperty().bind(widthProperty());
         canvas.heightProperty().bind(heightProperty());
@@ -41,14 +50,67 @@ public class MapView extends StackPane {
 
         getChildren().add(canvas);
 
-        Label attribution = new Label("\u00A9 OpenStreetMap contributors");
+        attribution = new Label(tileSource.getAttribution());
         attribution.setFont(Font.font(11));
         attribution.setStyle("-fx-background-color: rgba(255,255,255,0.7); -fx-padding: 2 6 2 6;");
         StackPane.setAlignment(attribution, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(attribution, new Insets(0, 4, 4, 0));
         getChildren().add(attribution);
 
+        sourceCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(TileSource source) {
+                return source == null ? "" : source.getDisplayName();
+            }
+
+            @Override
+            public TileSource fromString(String string) {
+                return null;
+            }
+        });
+        sourceCombo.setOnAction(e -> {
+            TileSource selected = sourceCombo.getValue();
+            if (selected != null && selected != this.tileSource) {
+                selectSource(selected);
+            }
+        });
+        StackPane.setAlignment(sourceCombo, Pos.TOP_RIGHT);
+        StackPane.setMargin(sourceCombo, new Insets(8, 8, 0, 0));
+        getChildren().add(sourceCombo);
+
         setupInputHandlers();
+    }
+
+    public void setAvailableSources(List<TileSource> sources) {
+        sourceCombo.getItems().setAll(sources);
+        sourceCombo.setValue(tileSource);
+    }
+
+    public void selectSource(TileSource source) {
+        this.tileSource = source;
+        tileCache.setTileSource(source);
+        attribution.setText(source.getAttribution());
+
+        // Update combo without re-firing the action
+        sourceCombo.setValue(source);
+
+        // Clamp zoom to the new source's range
+        if (zoom < source.getMinZoom()) {
+            zoom = source.getMinZoom();
+            centerX = TileMath.lonToTileX(TileMath.tileXToLon(centerX, zoom), zoom);
+            centerY = TileMath.latToTileY(TileMath.tileYToLat(centerY, zoom), zoom);
+        } else if (zoom > source.getMaxZoom()) {
+            // Preserve geographic position when clamping zoom down
+            double lon = TileMath.tileXToLon(centerX, zoom);
+            double lat = TileMath.tileYToLat(centerY, zoom);
+            zoom = source.getMaxZoom();
+            centerX = TileMath.lonToTileX(lon, zoom);
+            centerY = TileMath.latToTileY(lat, zoom);
+        }
+
+        clampCenter();
+        render();
+        notifyStateUpdate();
     }
 
     private void setupInputHandlers() {
@@ -66,6 +128,7 @@ public class MapView extends StackPane {
             centerY = dragStartCenterY - dy / TILE_SIZE;
             clampCenter();
             render();
+            notifyStateUpdate();
         });
 
         canvas.setOnScroll(e -> {
@@ -81,9 +144,9 @@ public class MapView extends StackPane {
             double lat = TileMath.tileYToLat(tileYBefore, zoom);
 
             int oldZoom = zoom;
-            if (e.getDeltaY() > 0 && zoom < MAX_ZOOM) {
+            if (e.getDeltaY() > 0 && zoom < tileSource.getMaxZoom()) {
                 zoom++;
-            } else if (e.getDeltaY() < 0 && zoom > MIN_ZOOM) {
+            } else if (e.getDeltaY() < 0 && zoom > tileSource.getMinZoom()) {
                 zoom--;
             }
 
@@ -97,6 +160,7 @@ public class MapView extends StackPane {
                 centerY = tileYAfter - (mouseY - canvas.getHeight() / 2.0) / TILE_SIZE;
                 clampCenter();
                 render();
+                notifyStateUpdate();
             }
         });
     }
@@ -155,5 +219,25 @@ public class MapView extends StackPane {
 
     public void shutdown() {
         tileCache.shutdown();
+    }
+
+    public void setStateUpdateListener(Runnable listener) {
+        this.stateUpdateListener = listener;
+    }
+
+    private void notifyStateUpdate() {
+        if (stateUpdateListener != null) {
+            stateUpdateListener.run();
+        }
+    }
+
+    public int getZoom() {
+        return zoom;
+    }
+
+    public double[] getCenterLatLon() {
+        double lon = TileMath.tileXToLon(centerX, zoom);
+        double lat = TileMath.tileYToLat(centerY, zoom);
+        return new double[]{lat, lon};
     }
 }
