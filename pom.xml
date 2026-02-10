@@ -49,7 +49,10 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.johnreah.mapster.App</mainClass>
+                    <mainClass>com.johnreah.mapster/com.johnreah.mapster.App</mainClass>
+                    <options>
+                        <option>--enable-native-access=javafx.graphics</option>
+                    </options>
                 </configuration>
             </plugin>
             <plugin>

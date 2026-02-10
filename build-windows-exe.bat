@@ -23,7 +23,8 @@ jpackage ^
   --dest target/dist ^
   --app-version 1.0.0 ^
   --vendor johnreah ^
-  --java-options "-Dfile.encoding=UTF-8"
+  --java-options "-Dfile.encoding=UTF-8" ^
+  --java-options "--enable-native-access=javafx.graphics"
 
 rem Make executable writable
 attrib -R "target\dist\Mapster\Mapster.exe"
