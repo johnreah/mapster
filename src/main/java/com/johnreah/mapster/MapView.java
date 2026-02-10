@@ -17,6 +17,7 @@ import java.util.List;
 public class MapView extends StackPane {
 
     private static final int TILE_SIZE = 256;
+    private static final int MAX_ZOOM = 20;
 
     private final Canvas canvas = new Canvas();
     private final TileCache tileCache;
@@ -94,18 +95,11 @@ public class MapView extends StackPane {
         // Update combo without re-firing the action
         sourceCombo.setValue(source);
 
-        // Clamp zoom to the new source's range
+        // Clamp zoom to the minimum zoom level only
         if (zoom < source.getMinZoom()) {
             zoom = source.getMinZoom();
             centerX = TileMath.lonToTileX(TileMath.tileXToLon(centerX, zoom), zoom);
             centerY = TileMath.latToTileY(TileMath.tileYToLat(centerY, zoom), zoom);
-        } else if (zoom > source.getMaxZoom()) {
-            // Preserve geographic position when clamping zoom down
-            double lon = TileMath.tileXToLon(centerX, zoom);
-            double lat = TileMath.tileYToLat(centerY, zoom);
-            zoom = source.getMaxZoom();
-            centerX = TileMath.lonToTileX(lon, zoom);
-            centerY = TileMath.latToTileY(lat, zoom);
         }
 
         clampCenter();
@@ -144,7 +138,7 @@ public class MapView extends StackPane {
             double lat = TileMath.tileYToLat(tileYBefore, zoom);
 
             int oldZoom = zoom;
-            if (e.getDeltaY() > 0 && zoom < tileSource.getMaxZoom()) {
+            if (e.getDeltaY() > 0 && zoom < MAX_ZOOM) {
                 zoom++;
             } else if (e.getDeltaY() < 0 && zoom > tileSource.getMinZoom()) {
                 zoom--;

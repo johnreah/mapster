@@ -56,10 +56,36 @@ public class TileCache {
     public Image getTile(int zoom, int x, int y) {
         TileSource source = this.tileSource;
         String key = source.getId() + "/" + zoom + "/" + x + "/" + y;
+
+        // Check cache first
         synchronized (cache) {
             Image img = cache.get(key);
             if (img != null) return img;
         }
+
+        // If zoom exceeds source's max zoom, scale from the highest available zoom
+        if (zoom > source.getMaxZoom()) {
+            Image scaledTile = getScaledTile(source, zoom, x, y);
+            if (scaledTile != null) {
+                synchronized (cache) {
+                    cache.put(key, scaledTile);
+                }
+                return scaledTile;
+            }
+            // Try to fetch the lower zoom tile if not in cache
+            int effectiveZoom = source.getMaxZoom();
+            int zoomDiff = zoom - effectiveZoom;
+            int divisor = 1 << zoomDiff;
+            int effectiveX = x / divisor;
+            int effectiveY = y / divisor;
+            String effectiveKey = source.getId() + "/" + effectiveZoom + "/" + effectiveX + "/" + effectiveY;
+            if (inflight.add(effectiveKey)) {
+                executor.submit(() -> fetchTile(source, effectiveKey, effectiveZoom, effectiveX, effectiveY));
+            }
+            return null;
+        }
+
+        // Normal flow for supported zoom levels
         Image diskImg = loadFromDisk(source, zoom, x, y);
         if (diskImg != null) {
             synchronized (cache) {
@@ -71,6 +97,56 @@ public class TileCache {
             executor.submit(() -> fetchTile(source, key, zoom, x, y));
         }
         return null;
+    }
+
+    private Image getScaledTile(TileSource source, int requestedZoom, int x, int y) {
+        int effectiveZoom = source.getMaxZoom();
+        int zoomDiff = requestedZoom - effectiveZoom;
+        int divisor = 1 << zoomDiff;
+
+        // Find parent tile coordinates at effective zoom
+        int parentX = x / divisor;
+        int parentY = y / divisor;
+
+        // Check if parent tile is in cache
+        String parentKey = source.getId() + "/" + effectiveZoom + "/" + parentX + "/" + parentY;
+        Image parentTile;
+        synchronized (cache) {
+            parentTile = cache.get(parentKey);
+        }
+
+        if (parentTile == null) {
+            // Try loading from disk
+            parentTile = loadFromDisk(source, effectiveZoom, parentX, parentY);
+            if (parentTile != null) {
+                synchronized (cache) {
+                    cache.put(parentKey, parentTile);
+                }
+            }
+        }
+
+        if (parentTile == null) {
+            return null;
+        }
+
+        // Calculate which quadrant of the parent tile to extract
+        int subX = x % divisor;
+        int subY = y % divisor;
+        double tileSize = 256.0;
+        double subTileSize = tileSize / divisor;
+
+        // Create a scaled image from the appropriate region
+        javafx.scene.image.WritableImage scaled = new javafx.scene.image.WritableImage(256, 256);
+        javafx.scene.canvas.Canvas tempCanvas = new javafx.scene.canvas.Canvas(256, 256);
+        javafx.scene.canvas.GraphicsContext gc = tempCanvas.getGraphicsContext2D();
+
+        // Draw the sub-region scaled up to 256x256
+        gc.drawImage(parentTile,
+            subX * subTileSize, subY * subTileSize, subTileSize, subTileSize,
+            0, 0, 256, 256);
+
+        tempCanvas.snapshot(null, scaled);
+        return scaled;
     }
 
     private void fetchTile(TileSource source, String key, int zoom, int x, int y) {
