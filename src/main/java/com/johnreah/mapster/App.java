@@ -103,7 +103,11 @@ public class App extends Application {
         zoomInButton.setOnAction(e -> mapView.zoomIn());
         Button zoomOutButton = new Button("\u2013");
         zoomOutButton.setOnAction(e -> mapView.zoomOut());
-        return new ToolBar(zoomInButton, zoomOutButton);
+
+        ToggleButton drawLineButton = new ToggleButton("\u270E");
+        drawLineButton.setOnAction(e -> mapView.setDrawingMode(drawLineButton.isSelected()));
+
+        return new ToolBar(zoomInButton, zoomOutButton, new Separator(), drawLineButton);
     }
 
     private MenuBar buildMenuBar(List<TileSource> sources, TileSource defaultSource) {

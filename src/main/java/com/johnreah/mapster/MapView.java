@@ -12,12 +12,14 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.StringConverter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MapView extends StackPane {
 
     private static final int TILE_SIZE = 256;
     private static final int MAX_ZOOM = 20;
+    private static final double FINALIZE_DISTANCE = 10.0; // pixels
 
     private final Canvas canvas = new Canvas();
     private final TileCache tileCache;
@@ -33,6 +35,18 @@ public class MapView extends StackPane {
     private double dragStartCenterX, dragStartCenterY;
 
     private Runnable stateUpdateListener;
+
+    // Drawing mode state
+    private boolean drawingMode = false;
+    private List<double[]> currentLinePoints = new ArrayList<>(); // [lat, lon]
+    private List<List<double[]>> completedLines = new ArrayList<>();
+    private double currentMouseX = 0;
+    private double currentMouseY = 0;
+
+    // Editing state
+    private int selectedLineIndex = -1;
+    private int selectedPointIndex = -1;
+    private boolean isDraggingPoint = false;
 
     public MapView(TileSource tileSource) {
         this.tileSource = tileSource;
@@ -109,21 +123,74 @@ public class MapView extends StackPane {
 
     private void setupInputHandlers() {
         canvas.setOnMousePressed(e -> {
+            // Request focus so keyboard events work
+            canvas.requestFocus();
+
             dragStartX = e.getX();
             dragStartY = e.getY();
             dragStartCenterX = centerX;
             dragStartCenterY = centerY;
+
+            // Check if clicking on a point of a completed line
+            if (!drawingMode) {
+                findPointNearMouse(e.getX(), e.getY());
+                if (selectedLineIndex != -1 && selectedPointIndex != -1) {
+                    isDraggingPoint = true;
+                }
+            }
         });
 
         canvas.setOnMouseDragged(e -> {
-            double dx = e.getX() - dragStartX;
-            double dy = e.getY() - dragStartY;
-            centerX = dragStartCenterX - dx / TILE_SIZE;
-            centerY = dragStartCenterY - dy / TILE_SIZE;
-            clampCenter();
-            render();
-            notifyStateUpdate();
+            if (isDraggingPoint) {
+                // Dragging a point on a completed line
+                double[] newLatLon = screenToLatLon(e.getX(), e.getY());
+                completedLines.get(selectedLineIndex).get(selectedPointIndex)[0] = newLatLon[0];
+                completedLines.get(selectedLineIndex).get(selectedPointIndex)[1] = newLatLon[1];
+                render();
+            } else if (!drawingMode) {
+                // Normal map panning
+                double dx = e.getX() - dragStartX;
+                double dy = e.getY() - dragStartY;
+                centerX = dragStartCenterX - dx / TILE_SIZE;
+                centerY = dragStartCenterY - dy / TILE_SIZE;
+                clampCenter();
+                render();
+                notifyStateUpdate();
+            }
         });
+
+        canvas.setOnMouseReleased(e -> {
+            if (isDraggingPoint) {
+                isDraggingPoint = false;
+                selectedLineIndex = -1;
+                selectedPointIndex = -1;
+            }
+        });
+
+        canvas.setOnMouseClicked(e -> {
+            if (drawingMode) {
+                handleDrawingClick(e.getX(), e.getY());
+            }
+        });
+
+        canvas.setOnMouseMoved(e -> {
+            if (drawingMode && !currentLinePoints.isEmpty()) {
+                currentMouseX = e.getX();
+                currentMouseY = e.getY();
+                render();
+            }
+        });
+
+        canvas.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE && drawingMode && !currentLinePoints.isEmpty()) {
+                // Abort current line drawing
+                currentLinePoints.clear();
+                render();
+            }
+        });
+
+        // Make canvas focusable so it can receive keyboard events
+        canvas.setFocusTraversable(true);
 
         canvas.setOnScroll(e -> {
             double mouseX = e.getX();
@@ -209,6 +276,82 @@ public class MapView extends StackPane {
                 }
             }
         }
+
+        // Draw completed lines
+        renderLines(gc, completedLines, Color.BLUE, 2.0);
+
+        // Draw points on completed lines
+        gc.setFill(Color.BLUE);
+        for (List<double[]> line : completedLines) {
+            for (double[] point : line) {
+                double[] screenPos = latLonToScreen(point[0], point[1]);
+                gc.fillOval(screenPos[0] - 4, screenPos[1] - 4, 8, 8);
+            }
+        }
+
+        // Draw current line being drawn
+        if (!currentLinePoints.isEmpty()) {
+            List<List<double[]>> currentLineAsList = new ArrayList<>();
+            currentLineAsList.add(currentLinePoints);
+            renderLines(gc, currentLineAsList, Color.RED, 3.0);
+
+            // Draw preview line from last point to current mouse position
+            double[] lastPoint = currentLinePoints.get(currentLinePoints.size() - 1);
+            double[] lastScreenPos = latLonToScreen(lastPoint[0], lastPoint[1]);
+            gc.setStroke(Color.rgb(255, 100, 100, 0.6));
+            gc.setLineWidth(2.0);
+            gc.strokeLine(lastScreenPos[0], lastScreenPos[1], currentMouseX, currentMouseY);
+
+            // Draw points
+            gc.setFill(Color.RED);
+            for (double[] point : currentLinePoints) {
+                double[] screenPos = latLonToScreen(point[0], point[1]);
+                gc.fillOval(screenPos[0] - 4, screenPos[1] - 4, 8, 8);
+            }
+        }
+    }
+
+    private void renderLines(GraphicsContext gc, List<List<double[]>> lines, Color color, double lineWidth) {
+        gc.setStroke(color);
+        gc.setLineWidth(lineWidth);
+
+        for (List<double[]> line : lines) {
+            if (line.size() < 2) continue;
+
+            for (int i = 0; i < line.size() - 1; i++) {
+                double[] p1 = latLonToScreen(line.get(i)[0], line.get(i)[1]);
+                double[] p2 = latLonToScreen(line.get(i + 1)[0], line.get(i + 1)[1]);
+                gc.strokeLine(p1[0], p1[1], p2[0], p2[1]);
+            }
+        }
+    }
+
+    private double[] latLonToScreen(double lat, double lon) {
+        double tileX = TileMath.lonToTileX(lon, zoom);
+        double tileY = TileMath.latToTileY(lat, zoom);
+
+        double w = canvas.getWidth();
+        double h = canvas.getHeight();
+        double offsetX = w / 2.0 - centerX * TILE_SIZE;
+        double offsetY = h / 2.0 - centerY * TILE_SIZE;
+
+        double screenX = offsetX + tileX * TILE_SIZE;
+        double screenY = offsetY + tileY * TILE_SIZE;
+
+        return new double[]{screenX, screenY};
+    }
+
+    private double[] screenToLatLon(double screenX, double screenY) {
+        double w = canvas.getWidth();
+        double h = canvas.getHeight();
+
+        double tileX = centerX + (screenX - w / 2.0) / TILE_SIZE;
+        double tileY = centerY + (screenY - h / 2.0) / TILE_SIZE;
+
+        double lon = TileMath.tileXToLon(tileX, zoom);
+        double lat = TileMath.tileYToLat(tileY, zoom);
+
+        return new double[]{lat, lon};
     }
 
     public void shutdown() {
@@ -259,5 +402,77 @@ public class MapView extends StackPane {
         double lon = TileMath.tileXToLon(centerX, zoom);
         double lat = TileMath.tileYToLat(centerY, zoom);
         return new double[]{lat, lon};
+    }
+
+    public void setDrawingMode(boolean enabled) {
+        this.drawingMode = enabled;
+        if (enabled) {
+            // Request focus when entering drawing mode
+            canvas.requestFocus();
+        } else {
+            // Exit drawing mode - clear current line
+            currentLinePoints.clear();
+            render();
+        }
+    }
+
+    private void handleDrawingClick(double screenX, double screenY) {
+        double[] latLon = screenToLatLon(screenX, screenY);
+
+        // Check if this click is close to the last point (finalize)
+        if (currentLinePoints.size() >= 2) {
+            double[] lastPoint = currentLinePoints.get(currentLinePoints.size() - 1);
+            double[] lastScreenPos = latLonToScreen(lastPoint[0], lastPoint[1]);
+
+            double distance = Math.sqrt(
+                Math.pow(screenX - lastScreenPos[0], 2) +
+                Math.pow(screenY - lastScreenPos[1], 2)
+            );
+
+            if (distance < FINALIZE_DISTANCE) {
+                // Finalize the line
+                if (currentLinePoints.size() >= 2) {
+                    completedLines.add(new ArrayList<>(currentLinePoints));
+                }
+                currentLinePoints.clear();
+                render();
+                return;
+            }
+        }
+
+        // Add new point to the current line
+        currentLinePoints.add(latLon);
+
+        // Update mouse position so preview line is correct
+        currentMouseX = screenX;
+        currentMouseY = screenY;
+
+        render();
+    }
+
+    private void findPointNearMouse(double mouseX, double mouseY) {
+        selectedLineIndex = -1;
+        selectedPointIndex = -1;
+
+        double threshold = 8.0; // pixels
+
+        for (int lineIdx = 0; lineIdx < completedLines.size(); lineIdx++) {
+            List<double[]> line = completedLines.get(lineIdx);
+            for (int pointIdx = 0; pointIdx < line.size(); pointIdx++) {
+                double[] point = line.get(pointIdx);
+                double[] screenPos = latLonToScreen(point[0], point[1]);
+
+                double distance = Math.sqrt(
+                    Math.pow(mouseX - screenPos[0], 2) +
+                    Math.pow(mouseY - screenPos[1], 2)
+                );
+
+                if (distance < threshold) {
+                    selectedLineIndex = lineIdx;
+                    selectedPointIndex = pointIdx;
+                    return;
+                }
+            }
+        }
     }
 }
