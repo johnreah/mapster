@@ -29,6 +29,8 @@ public class App extends Application {
         mapView.setMinWidth(200);
 
         MenuBar menuBar = buildMenuBar(sources, defaultSource);
+        ToolBar toolBar = buildToolBar();
+        VBox topArea = new VBox(menuBar, toolBar);
         VBox sidePanel = buildSidePanel();
 
         SplitPane splitPane = new SplitPane();
@@ -38,7 +40,7 @@ public class App extends Application {
         SplitPane.setResizableWithParent(sidePanel, false);
 
         BorderPane root = new BorderPane();
-        root.setTop(menuBar);
+        root.setTop(topArea);
         root.setCenter(splitPane);
 
         Scene scene = new Scene(root, 1024, 768);
@@ -94,6 +96,14 @@ public class App extends Application {
         }
 
         return sources;
+    }
+
+    private ToolBar buildToolBar() {
+        Button zoomInButton = new Button("+");
+        zoomInButton.setOnAction(e -> mapView.zoomIn());
+        Button zoomOutButton = new Button("\u2013");
+        zoomOutButton.setOnAction(e -> mapView.zoomOut());
+        return new ToolBar(zoomInButton, zoomOutButton);
     }
 
     private MenuBar buildMenuBar(List<TileSource> sources, TileSource defaultSource) {

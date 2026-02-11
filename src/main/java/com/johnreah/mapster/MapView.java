@@ -225,6 +225,32 @@ public class MapView extends StackPane {
         }
     }
 
+    public void zoomIn() {
+        if (zoom < MAX_ZOOM) {
+            double lon = TileMath.tileXToLon(centerX, zoom);
+            double lat = TileMath.tileYToLat(centerY, zoom);
+            zoom++;
+            centerX = TileMath.lonToTileX(lon, zoom);
+            centerY = TileMath.latToTileY(lat, zoom);
+            clampCenter();
+            render();
+            notifyStateUpdate();
+        }
+    }
+
+    public void zoomOut() {
+        if (zoom > tileSource.getMinZoom()) {
+            double lon = TileMath.tileXToLon(centerX, zoom);
+            double lat = TileMath.tileYToLat(centerY, zoom);
+            zoom--;
+            centerX = TileMath.lonToTileX(lon, zoom);
+            centerY = TileMath.latToTileY(lat, zoom);
+            clampCenter();
+            render();
+            notifyStateUpdate();
+        }
+    }
+
     public int getZoom() {
         return zoom;
     }
