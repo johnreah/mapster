@@ -66,7 +66,7 @@ class TileSourceTest {
     void osZoomRange() {
         OrdnanceSurveyTileSource os = new OrdnanceSurveyTileSource("Road_3857", "OS Road");
         assertEquals(0, os.getMinZoom());
-        assertEquals(16, os.getMaxZoom());
+        assertEquals(20, os.getMaxZoom());
     }
 
     @Test
