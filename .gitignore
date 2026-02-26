@@ -28,7 +28,7 @@ target/
 
 # IDE
 .idea/
-.claude/
+.claude/*.local.*
 
 # OS
 nul

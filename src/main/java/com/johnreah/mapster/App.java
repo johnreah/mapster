@@ -25,7 +25,6 @@ public class App extends Application {
         TileSource defaultSource = sources.get(0);
 
         mapView = new MapView(defaultSource);
-        mapView.setAvailableSources(sources);
         mapView.setMinWidth(200);
 
         MenuBar menuBar = buildMenuBar(sources, defaultSource);
@@ -104,10 +103,19 @@ public class App extends Application {
         Button zoomOutButton = new Button("\u2013");
         zoomOutButton.setOnAction(e -> mapView.zoomOut());
 
-        ToggleButton drawLineButton = new ToggleButton("\u270E");
-        drawLineButton.setOnAction(e -> mapView.setDrawingMode(drawLineButton.isSelected()));
+        // Mode toggle buttons (radio-style)
+        ToggleGroup modeGroup = new ToggleGroup();
 
-        return new ToolBar(zoomInButton, zoomOutButton, new Separator(), drawLineButton);
+        ToggleButton navigationModeButton = new ToggleButton("\u2630"); // ☰ navigation icon
+        navigationModeButton.setToggleGroup(modeGroup);
+        navigationModeButton.setSelected(true); // Default to navigation mode
+        navigationModeButton.setOnAction(e -> mapView.setNavigationMode());
+
+        ToggleButton drawingModeButton = new ToggleButton("\u270E"); // ✎ pencil icon
+        drawingModeButton.setToggleGroup(modeGroup);
+        drawingModeButton.setOnAction(e -> mapView.setDrawingMode());
+
+        return new ToolBar(zoomInButton, zoomOutButton, new Separator(), navigationModeButton, drawingModeButton);
     }
 
     private MenuBar buildMenuBar(List<TileSource> sources, TileSource defaultSource) {
