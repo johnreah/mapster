@@ -13,7 +13,7 @@ import javafx.scene.text.Font;
 
 public class MapView extends StackPane {
 
-    private static final int TILE_SIZE = 256;
+    private static final int TILE_SIZE = TileMath.TILE_SIZE;
     private static final int MAX_ZOOM = 20;
 
     private final Canvas canvas = new Canvas();
@@ -176,13 +176,10 @@ public class MapView extends StackPane {
             double mouseX = e.getX();
             double mouseY = e.getY();
 
-            // Convert mouse position to tile coordinates before zoom
-            double tileXBefore = centerX + (mouseX - canvas.getWidth() / 2.0) / TILE_SIZE;
-            double tileYBefore = centerY + (mouseY - canvas.getHeight() / 2.0) / TILE_SIZE;
-
-            // Convert to geographic coordinates
-            double lon = TileMath.tileXToLon(tileXBefore, zoom);
-            double lat = TileMath.tileYToLat(tileYBefore, zoom);
+            // Convert mouse position to geographic coordinates before zoom
+            double[] latLon = TileMath.screenToLatLon(mouseX, mouseY, zoom, centerX, centerY, canvas.getWidth(), canvas.getHeight());
+            double lat = latLon[0];
+            double lon = latLon[1];
 
             int oldZoom = zoom;
             if (e.getDeltaY() > 0 && zoom < MAX_ZOOM) {
@@ -259,34 +256,6 @@ public class MapView extends StackPane {
 
         // Draw lines and points using DrawingTool
         drawingTool.render(gc, createCoordinateConverter());
-    }
-
-    private double[] latLonToScreen(double lat, double lon) {
-        double tileX = TileMath.lonToTileX(lon, zoom);
-        double tileY = TileMath.latToTileY(lat, zoom);
-
-        double w = canvas.getWidth();
-        double h = canvas.getHeight();
-        double offsetX = w / 2.0 - centerX * TILE_SIZE;
-        double offsetY = h / 2.0 - centerY * TILE_SIZE;
-
-        double screenX = offsetX + tileX * TILE_SIZE;
-        double screenY = offsetY + tileY * TILE_SIZE;
-
-        return new double[]{screenX, screenY};
-    }
-
-    private double[] screenToLatLon(double screenX, double screenY) {
-        double w = canvas.getWidth();
-        double h = canvas.getHeight();
-
-        double tileX = centerX + (screenX - w / 2.0) / TILE_SIZE;
-        double tileY = centerY + (screenY - h / 2.0) / TILE_SIZE;
-
-        double lon = TileMath.tileXToLon(tileX, zoom);
-        double lat = TileMath.tileYToLat(tileY, zoom);
-
-        return new double[]{lat, lon};
     }
 
     public void shutdown() {
@@ -368,15 +337,17 @@ public class MapView extends StackPane {
     }
 
     private DrawingTool.CoordinateConverter createCoordinateConverter() {
+        double w = canvas.getWidth();
+        double h = canvas.getHeight();
         return new DrawingTool.CoordinateConverter() {
             @Override
             public double[] latLonToScreen(double lat, double lon) {
-                return MapView.this.latLonToScreen(lat, lon);
+                return TileMath.latLonToScreen(lat, lon, zoom, centerX, centerY, w, h);
             }
 
             @Override
             public double[] screenToLatLon(double screenX, double screenY) {
-                return MapView.this.screenToLatLon(screenX, screenY);
+                return TileMath.screenToLatLon(screenX, screenY, zoom, centerX, centerY, w, h);
             }
         };
     }

@@ -2,6 +2,8 @@ package com.johnreah.mapster;
 
 public final class TileMath {
 
+    public static final int TILE_SIZE = 256;
+
     private TileMath() {}
 
     public static double lonToTileX(double lon, int zoom) {
@@ -31,5 +33,21 @@ public final class TileMath {
         if (tile < 0) return 0;
         if (tile >= max) return max - 1;
         return tile;
+    }
+
+    public static double[] latLonToScreen(double lat, double lon, int zoom,
+            double centerX, double centerY, double canvasWidth, double canvasHeight) {
+        double tileX = lonToTileX(lon, zoom);
+        double tileY = latToTileY(lat, zoom);
+        double offsetX = canvasWidth / 2.0 - centerX * TILE_SIZE;
+        double offsetY = canvasHeight / 2.0 - centerY * TILE_SIZE;
+        return new double[]{offsetX + tileX * TILE_SIZE, offsetY + tileY * TILE_SIZE};
+    }
+
+    public static double[] screenToLatLon(double screenX, double screenY, int zoom,
+            double centerX, double centerY, double canvasWidth, double canvasHeight) {
+        double tileX = centerX + (screenX - canvasWidth / 2.0) / TILE_SIZE;
+        double tileY = centerY + (screenY - canvasHeight / 2.0) / TILE_SIZE;
+        return new double[]{tileYToLat(tileY, zoom), tileXToLon(tileX, zoom)};
     }
 }
