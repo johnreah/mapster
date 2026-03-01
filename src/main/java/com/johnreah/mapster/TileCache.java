@@ -2,6 +2,8 @@ package com.johnreah.mapster;
 
 import javafx.application.Platform;
 import javafx.scene.image.Image;
+import javafx.scene.image.PixelFormat;
+import javafx.scene.image.WritableImage;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -129,23 +131,24 @@ public class TileCache {
             return null;
         }
 
-        // Calculate which quadrant of the parent tile to extract
+        // Calculate which sub-region of the parent tile to extract and scale up
         int subX = x % divisor;
         int subY = y % divisor;
-        double tileSize = 256.0;
-        double subTileSize = tileSize / divisor;
+        int tileSize = TileMath.TILE_SIZE;
 
-        // Create a scaled image from the appropriate region
-        javafx.scene.image.WritableImage scaled = new javafx.scene.image.WritableImage(256, 256);
-        javafx.scene.canvas.Canvas tempCanvas = new javafx.scene.canvas.Canvas(256, 256);
-        javafx.scene.canvas.GraphicsContext gc = tempCanvas.getGraphicsContext2D();
-
-        // Draw the sub-region scaled up to 256x256
-        gc.drawImage(parentTile,
-            subX * subTileSize, subY * subTileSize, subTileSize, subTileSize,
-            0, 0, 256, 256);
-
-        tempCanvas.snapshot(null, scaled);
+        // Scale the sub-region to a full tile via pixel manipulation (no FX thread required)
+        int[] pixels = new int[tileSize * tileSize];
+        var reader = parentTile.getPixelReader();
+        for (int dy = 0; dy < tileSize; dy++) {
+            for (int dx = 0; dx < tileSize; dx++) {
+                pixels[dy * tileSize + dx] = reader.getArgb(
+                        (subX * tileSize + dx) / divisor,
+                        (subY * tileSize + dy) / divisor);
+            }
+        }
+        WritableImage scaled = new WritableImage(tileSize, tileSize);
+        scaled.getPixelWriter().setPixels(0, 0, tileSize, tileSize,
+                PixelFormat.getIntArgbInstance(), pixels, 0, tileSize);
         return scaled;
     }
 
