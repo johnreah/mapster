@@ -1,24 +1,19 @@
 package com.johnreah.mapster;
 
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.Label;
 import javafx.scene.image.Image;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
 
-public class MapView extends StackPane {
+public class MapView extends Pane {
 
     private static final int TILE_SIZE = TileMath.TILE_SIZE;
     private static final int MAX_ZOOM = 20;
 
     private final Canvas canvas = new Canvas();
     private final TileCache tileCache;
-    private final Label attribution;
     private final DrawingTool drawingTool = new DrawingTool();
 
     private TileSource tileSource;
@@ -61,20 +56,12 @@ public class MapView extends StackPane {
 
         getChildren().add(canvas);
 
-        attribution = new Label(tileSource.getAttribution());
-        attribution.setFont(Font.font(11));
-        attribution.setStyle("-fx-background-color: rgba(255,255,255,0.7); -fx-padding: 2 6 2 6;");
-        StackPane.setAlignment(attribution, Pos.BOTTOM_RIGHT);
-        StackPane.setMargin(attribution, new Insets(0, 4, 4, 0));
-        getChildren().add(attribution);
-
         setupInputHandlers();
     }
 
     public void selectSource(TileSource source) {
         this.tileSource = source;
         tileCache.setTileSource(source);
-        attribution.setText(source.getAttribution());
 
         // Clamp zoom to the minimum zoom level only
         if (zoom < source.getMinZoom()) {
