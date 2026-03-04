@@ -1,4 +1,4 @@
-package com.johnreah.mapster.model;
+package com.johnreah.mapster.view.maptiles;
 
 public class GoogleStreetMapsTileSource implements TileSource {
 

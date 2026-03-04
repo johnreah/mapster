@@ -1,25 +1,25 @@
-package com.johnreah.mapster.model;
+package com.johnreah.mapster.view.maptiles;
 
-public class OsmTileSource implements TileSource {
+public class GoogleSatelliteTileSource implements TileSource {
 
     @Override
     public String getId() {
-        return "osm";
+        return "google-satellite";
     }
 
     @Override
     public String getDisplayName() {
-        return "OpenStreetMap";
+        return "Google Satellite";
     }
 
     @Override
     public String getAttribution() {
-        return "\u00A9 OpenStreetMap contributors";
+        return "\u00A9 Google";
     }
 
     @Override
     public String getTileUrl(int zoom, int x, int y) {
-        return String.format("https://tile.openstreetmap.org/%d/%d/%d.png", zoom, x, y);
+        return String.format("https://mt1.google.com/vt/lyrs=s&x=%d&y=%d&z=%d", x, y, zoom);
     }
 
     @Override
@@ -29,7 +29,7 @@ public class OsmTileSource implements TileSource {
 
     @Override
     public int getMaxZoom() {
-        return 19;
+        return 20;
     }
 
     @Override

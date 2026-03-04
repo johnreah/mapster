@@ -1,4 +1,4 @@
-package com.johnreah.mapster.model;
+package com.johnreah.mapster.view.maptiles;
 
 import javafx.application.Platform;
 import javafx.scene.image.Image;

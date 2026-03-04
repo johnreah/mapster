@@ -1,10 +1,10 @@
 package com.johnreah.mapster.view;
 
-import com.johnreah.mapster.model.GoogleSatelliteTileSource;
-import com.johnreah.mapster.model.GoogleStreetMapsTileSource;
-import com.johnreah.mapster.model.OrdnanceSurveyTileSource;
-import com.johnreah.mapster.model.OsmTileSource;
-import com.johnreah.mapster.model.TileSource;
+import com.johnreah.mapster.view.maptiles.GoogleSatelliteTileSource;
+import com.johnreah.mapster.view.maptiles.GoogleStreetMapsTileSource;
+import com.johnreah.mapster.view.maptiles.OrdnanceSurveyTileSource;
+import com.johnreah.mapster.view.maptiles.OsmTileSource;
+import com.johnreah.mapster.view.maptiles.TileSource;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;

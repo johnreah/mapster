@@ -1,8 +1,8 @@
 package com.johnreah.mapster.view;
 
-import com.johnreah.mapster.model.TileCache;
-import com.johnreah.mapster.model.TileMath;
-import com.johnreah.mapster.model.TileSource;
+import com.johnreah.mapster.view.maptiles.TileCache;
+import com.johnreah.mapster.view.maptiles.TileMath;
+import com.johnreah.mapster.view.maptiles.TileSource;
 import com.johnreah.mapster.viewmodel.DrawingTool;
 
 import javafx.scene.Cursor;

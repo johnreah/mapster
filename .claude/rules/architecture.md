@@ -10,14 +10,14 @@
 
 - **`App`** — JavaFX entry point only. Builds the scene graph, wires up UI components, and delegates everything else. No map logic here.
 - **`MapView`** — Rendering and input handling for the map canvas. Owns the operation mode state (`NAVIGATION` / `DRAWING`). Does not contain tile fetching, caching, or drawing logic — it delegates those to `TileCache` and `DrawingTool`.
-- **`TileCache`** — All tile fetching and caching. Network requests run on a background `ExecutorService`; UI updates use `Platform.runLater`. Handles both memory cache (LRU, 512 entries) and disk cache (`~/.mapster/tiles/`).
-- **`TileMath`** — Pure static utility for Web Mercator coordinate conversions. No state, no dependencies.
+- **`TileCache`** (`view.maptiles`) — All tile fetching and caching. Network requests run on a background `ExecutorService`; UI updates use `Platform.runLater`. Handles both memory cache (LRU, 512 entries) and disk cache (`~/.mapster/tiles/`).
+- **`TileMath`** (`view.maptiles`) — Pure static utility for Web Mercator coordinate conversions. No state, no dependencies.
 - **`DrawingTool`** — All drawing state and behaviour (current line, completed lines, point editing/dragging). Stateful but not a JavaFX node. Communicates with `MapView` via the `CoordinateConverter` interface.
-- **`TileSource` (interface)** — Contract for tile providers: URL template, zoom range, attribution, availability check.
+- **`TileSource` (interface)** (`view.maptiles`) — Contract for tile providers: URL template, zoom range, attribution, availability check.
 
 ## TileSource Implementations
 
-All tile providers implement `TileSource`. The pattern is:
+All tile providers implement `TileSource` and live in `view.maptiles`. The pattern is:
 - `getId()` returns a stable, filesystem-safe string used as the disk cache directory name.
 - `isAvailable()` returns false when a required API key or environment variable is absent (e.g. Ordnance Survey).
 - Never hardcode tile URLs — they belong in the implementing class, not in `MapView` or `TileCache`.
