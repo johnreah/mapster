@@ -1,4 +1,4 @@
-package com.johnreah.mapster;
+package com.johnreah.mapster.model;
 
 public interface TileSource {
     String getId();

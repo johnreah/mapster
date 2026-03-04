@@ -1,5 +1,11 @@
 # Architecture
 
+## The application follows the Model-View-ViewModel (MVVM) pattern.
+
+- The View layer implements the user interface and contains JavaFX code and UI logic. All JavaFX user interface objects are in the View layer. The View knows about the ViewModel and can have dependencies on it. Actions taken by the user by interacting with the View can affect the View model by method calls, data binding or event handlers.
+- The ViewModel layer contains business logic and data that manage the state of the View layer. The ViewModel does not have direct dependencies on the View, but it can update objects in the View layer using data binding implemented by JavaFX properties or by raising events. The ViewModel can be unit tested in isolation of the View layer.
+- The Model layer contains domain classes. It contains no JavaFX code or UI logic. It does not know about the View and ViewModel layers, and has no dependencies on them. It can be unit tested in isolation of the View and ViewModel layers.
+
 ## Layers and Responsibilities
 
 - **`App`** — JavaFX entry point only. Builds the scene graph, wires up UI components, and delegates everything else. No map logic here.

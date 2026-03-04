@@ -1,4 +1,4 @@
-package com.johnreah.mapster;
+package com.johnreah.mapster.viewmodel;
 
 import javafx.scene.Cursor;
 import javafx.scene.canvas.GraphicsContext;
