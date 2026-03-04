@@ -1,6 +1,5 @@
 package com.johnreah.mapster.viewmodel;
 
-import javafx.scene.Cursor;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
 
@@ -172,19 +171,21 @@ public class DrawingTool {
         selectedPointIndex = -1;
     }
 
+    public enum CursorType { DEFAULT, CLOSED_HAND }
+
     /**
-     * Get the appropriate cursor for the current state.
+     * Get the appropriate cursor type for the current state.
      * @param mouseX Mouse X coordinate
      * @param mouseY Mouse Y coordinate
      * @param converter Coordinate converter
      * @param isNavigationMode true if in navigation mode
-     * @return Cursor to display
+     * @return CursorType to display
      */
-    public Cursor getCursor(double mouseX, double mouseY, CoordinateConverter converter, boolean isNavigationMode) {
+    public CursorType getCursorType(double mouseX, double mouseY, CoordinateConverter converter, boolean isNavigationMode) {
         if (isNavigationMode) {
-            return isPointNearMouse(mouseX, mouseY, converter) ? Cursor.DEFAULT : Cursor.CLOSED_HAND;
+            return isPointNearMouse(mouseX, mouseY, converter) ? CursorType.DEFAULT : CursorType.CLOSED_HAND;
         } else {
-            return Cursor.DEFAULT;
+            return CursorType.DEFAULT;
         }
     }
 

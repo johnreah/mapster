@@ -321,7 +321,10 @@ public class MapView extends Pane {
 
     private void updateNavigationCursor() {
         if (currentMode == OperationMode.NAVIGATION) {
-            Cursor desiredCursor = drawingTool.getCursor(lastMouseX, lastMouseY, createCoordinateConverter(), true);
+            Cursor desiredCursor = switch (drawingTool.getCursorType(lastMouseX, lastMouseY, createCoordinateConverter(), true)) {
+                case CLOSED_HAND -> Cursor.CLOSED_HAND;
+                case DEFAULT -> Cursor.DEFAULT;
+            };
             if (getCursor() != desiredCursor) {
                 setCursor(desiredCursor);
             }

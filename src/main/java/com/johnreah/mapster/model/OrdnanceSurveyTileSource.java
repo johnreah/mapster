@@ -2,6 +2,11 @@ package com.johnreah.mapster.model;
 
 public class OrdnanceSurveyTileSource implements TileSource {
 
+    public static final String ROAD_LAYER = "Road_3857";
+    public static final String ROAD_DISPLAY_NAME = "OS Road";
+    public static final String OUTDOOR_LAYER = "Outdoor_3857";
+    public static final String OUTDOOR_DISPLAY_NAME = "OS Outdoor";
+
     private final String layer;
     private final String displayName;
     private final String apiKey;

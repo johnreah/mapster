@@ -67,12 +67,12 @@ public class MainWindow {
         sources.add(new GoogleStreetMapsTileSource());
         sources.add(new GoogleSatelliteTileSource());
 
-        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource("Road_3857", "OS Road");
+        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource(OrdnanceSurveyTileSource.ROAD_LAYER, OrdnanceSurveyTileSource.ROAD_DISPLAY_NAME);
         if (osRoad.isAvailable()) {
             sources.add(osRoad);
         }
 
-        OrdnanceSurveyTileSource osOutdoor = new OrdnanceSurveyTileSource("Outdoor_3857", "OS Outdoor");
+        OrdnanceSurveyTileSource osOutdoor = new OrdnanceSurveyTileSource(OrdnanceSurveyTileSource.OUTDOOR_LAYER, OrdnanceSurveyTileSource.OUTDOOR_DISPLAY_NAME);
         if (osOutdoor.isAvailable()) {
             sources.add(osOutdoor);
         }
