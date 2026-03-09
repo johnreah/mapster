@@ -1,349 +1,126 @@
 package com.johnreah.mapster.view;
 
-import com.johnreah.mapster.view.maptiles.TileCache;
-import com.johnreah.mapster.view.maptiles.TileMath;
-import com.johnreah.mapster.view.maptiles.TileSource;
-import com.johnreah.mapster.viewmodel.DrawingTool;
+import com.johnreah.mapster.viewmodel.DrawingLayerViewModel;
+import com.johnreah.mapster.viewmodel.LayerStack;
+import com.johnreah.mapster.viewmodel.LayerViewModel;
+import com.johnreah.mapster.viewmodel.MapViewport;
+import com.johnreah.mapster.viewmodel.TileLayerViewModel;
 
-import javafx.scene.Cursor;
-import javafx.scene.canvas.Canvas;
-import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.image.Image;
-import javafx.scene.layout.Pane;
-import javafx.scene.paint.Color;
+import javafx.collections.ListChangeListener;
+import javafx.scene.layout.StackPane;
 
-public class MapView extends Pane {
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-    private static final int TILE_SIZE = TileMath.TILE_SIZE;
-    private static final int MAX_ZOOM = 20;
+/**
+ * Container for all map layers. Maintains a StackPane of {@link TileLayerView} and
+ * {@link DrawingLayerView} instances, with an {@link InputOverlayPane} on top to handle
+ * all mouse and keyboard input.
+ */
+public class MapView extends StackPane {
 
-    private final Canvas canvas = new Canvas();
-    private final TileCache tileCache;
-    private final DrawingTool drawingTool = new DrawingTool();
+    private final MapViewport viewport;
+    private final LayerStack layerStack;
+    private final InputOverlayPane inputOverlay;
 
-    private TileSource tileSource;
-    private double centerX;
-    private double centerY;
-    private int zoom;
+    private final Map<LayerViewModel, javafx.scene.layout.Pane> layerViewMap = new LinkedHashMap<>();
 
-    private double dragStartX, dragStartY;
-    private double dragStartCenterX, dragStartCenterY;
+    public MapView(MapViewport viewport, LayerStack layerStack) {
+        this.viewport = viewport;
+        this.layerStack = layerStack;
 
-    private Runnable stateUpdateListener;
+        inputOverlay = new InputOverlayPane(viewport);
 
-    // Operation mode
-    private enum OperationMode {
-        NAVIGATION,
-        DRAWING
-    }
-    private OperationMode currentMode = OperationMode.NAVIGATION;
+        rebuildChildren();
 
-    private double lastMouseX = 0;
-    private double lastMouseY = 0;
-
-    public MapView(TileSource tileSource) {
-        this.tileSource = tileSource;
-
-        // Default view: London
-        zoom = 10;
-        centerX = TileMath.lonToTileX(-0.09, zoom);
-        centerY = TileMath.latToTileY(51.505, zoom);
-
-        tileCache = new TileCache(tileSource, this::render);
-
-        canvas.widthProperty().bind(widthProperty());
-        canvas.heightProperty().bind(heightProperty());
-        canvas.widthProperty().addListener(e -> render());
-        canvas.heightProperty().addListener(e -> render());
-
-        // Set default cursor for navigation mode
-        setCursor(Cursor.CLOSED_HAND);
-
-        getChildren().add(canvas);
-
-        setupInputHandlers();
+        layerStack.getLayers().addListener((ListChangeListener<LayerViewModel>) c -> rebuildChildren());
+        layerStack.activeDrawingLayerProperty().addListener((obs, old, val) -> updateActiveDrawingLayer());
     }
 
-    public void selectSource(TileSource source) {
-        this.tileSource = source;
-        tileCache.setTileSource(source);
-
-        // Clamp zoom to the minimum zoom level only
-        if (zoom < source.getMinZoom()) {
-            zoom = source.getMinZoom();
-            centerX = TileMath.lonToTileX(TileMath.tileXToLon(centerX, zoom), zoom);
-            centerY = TileMath.latToTileY(TileMath.tileYToLat(centerY, zoom), zoom);
+    private void rebuildChildren() {
+        // Build the new ordered list of layer nodes
+        List<javafx.scene.Node> nodes = new ArrayList<>();
+        for (LayerViewModel lvm : layerStack.getLayers()) {
+            javafx.scene.layout.Pane view = layerViewMap.computeIfAbsent(lvm, this::createLayerView);
+            nodes.add(view);
         }
+        nodes.add(inputOverlay);
+        getChildren().setAll(nodes);
 
-        clampCenter();
-        render();
-        notifyStateUpdate();
-    }
-
-    private void setupInputHandlers() {
-        canvas.setOnMousePressed(e -> {
-            // Request focus so keyboard events work
-            canvas.requestFocus();
-
-            dragStartX = e.getX();
-            dragStartY = e.getY();
-            dragStartCenterX = centerX;
-            dragStartCenterY = centerY;
-
-            // Check if clicking on a point of a completed line in navigation mode
-            if (currentMode == OperationMode.NAVIGATION) {
-                if (drawingTool.selectPointNearMouse(e.getX(), e.getY(), createCoordinateConverter())) {
-                    drawingTool.startDraggingPoint();
+        // Shut down and remove views for layers that are no longer in the stack
+        Set<LayerViewModel> current = layerStack.getLayers().stream().collect(Collectors.toSet());
+        layerViewMap.entrySet().removeIf(entry -> {
+            if (!current.contains(entry.getKey())) {
+                if (entry.getValue() instanceof TileLayerView tlv) {
+                    tlv.shutdown();
                 }
+                return true;
             }
+            return false;
         });
 
-        canvas.setOnMouseDragged(e -> {
-            lastMouseX = e.getX();
-            lastMouseY = e.getY();
-
-            if (drawingTool.isDraggingPoint()) {
-                // Dragging a point on a completed line
-                drawingTool.updateDraggedPoint(e.getX(), e.getY(), createCoordinateConverter());
-                render();
-                updateNavigationCursor();
-            } else if (currentMode == OperationMode.NAVIGATION) {
-                // Normal map panning
-                double dx = e.getX() - dragStartX;
-                double dy = e.getY() - dragStartY;
-                centerX = dragStartCenterX - dx / TILE_SIZE;
-                centerY = dragStartCenterY - dy / TILE_SIZE;
-                clampCenter();
-                render();
-                updateNavigationCursor();
-                notifyStateUpdate();
-            }
-        });
-
-        canvas.setOnMouseReleased(e -> {
-            if (drawingTool.isDraggingPoint()) {
-                drawingTool.stopDraggingPoint();
-            }
-        });
-
-        canvas.setOnMouseClicked(e -> {
-            if (currentMode == OperationMode.DRAWING) {
-                drawingTool.handleDrawingClick(e.getX(), e.getY(), createCoordinateConverter());
-                render();
-            }
-        });
-
-        canvas.setOnMouseMoved(e -> {
-            lastMouseX = e.getX();
-            lastMouseY = e.getY();
-
-            if (currentMode == OperationMode.DRAWING && drawingTool.hasCurrentLine()) {
-                drawingTool.handleDrawingMouseMove(e.getX(), e.getY());
-                render();
-            } else if (currentMode == OperationMode.NAVIGATION) {
-                updateNavigationCursor();
-            }
-        });
-
-        setOnMouseEntered(e -> {
-            if (currentMode == OperationMode.NAVIGATION) {
-                setCursor(Cursor.CLOSED_HAND);
-            } else if (currentMode == OperationMode.DRAWING) {
-                setCursor(Cursor.DEFAULT);
-            }
-        });
-
-        canvas.setOnKeyPressed(e -> {
-            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE && currentMode == OperationMode.DRAWING && drawingTool.hasCurrentLine()) {
-                // Abort current line drawing
-                drawingTool.abortCurrentLine();
-                render();
-            }
-        });
-
-        // Make canvas focusable so it can receive keyboard events
-        canvas.setFocusTraversable(true);
-
-        canvas.setOnScroll(e -> {
-            double mouseX = e.getX();
-            double mouseY = e.getY();
-
-            // Convert mouse position to geographic coordinates before zoom
-            double[] latLon = TileMath.screenToLatLon(mouseX, mouseY, zoom, centerX, centerY, canvas.getWidth(), canvas.getHeight());
-            double lat = latLon[0];
-            double lon = latLon[1];
-
-            int oldZoom = zoom;
-            if (e.getDeltaY() > 0 && zoom < MAX_ZOOM) {
-                zoom++;
-            } else if (e.getDeltaY() < 0 && zoom > tileSource.getMinZoom()) {
-                zoom--;
-            }
-
-            if (zoom != oldZoom) {
-                // Convert geographic coordinates back to tile coordinates at new zoom
-                double tileXAfter = TileMath.lonToTileX(lon, zoom);
-                double tileYAfter = TileMath.latToTileY(lat, zoom);
-
-                // Adjust center so the point under the cursor stays fixed
-                centerX = tileXAfter - (mouseX - canvas.getWidth() / 2.0) / TILE_SIZE;
-                centerY = tileYAfter - (mouseY - canvas.getHeight() / 2.0) / TILE_SIZE;
-                clampCenter();
-                render();
-                notifyStateUpdate();
-            }
-        });
+        updateActiveDrawingLayer();
+        inputOverlay.setMinZoom(getEffectiveMinZoom());
     }
 
-    private void clampCenter() {
-        double max = TileMath.maxTile(zoom);
-        // Wrap X horizontally
-        centerX = ((centerX % max) + max) % max;
-        // Clamp Y
-        if (centerY < 0) centerY = 0;
-        if (centerY > max) centerY = max;
+    private javafx.scene.layout.Pane createLayerView(LayerViewModel lvm) {
+        if (lvm instanceof TileLayerViewModel tlvm) {
+            return new TileLayerView(tlvm, viewport);
+        } else if (lvm instanceof DrawingLayerViewModel dlvm) {
+            return new DrawingLayerView(dlvm, viewport);
+        }
+        throw new IllegalArgumentException("Unknown layer type: " + lvm.getClass());
     }
 
-    private void render() {
-        double w = canvas.getWidth();
-        double h = canvas.getHeight();
-        if (w <= 0 || h <= 0) return;
-
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-        gc.setFill(Color.LIGHTGRAY);
-        gc.fillRect(0, 0, w, h);
-
-        double max = TileMath.maxTile(zoom);
-
-        // Pixel offset of top-left corner relative to tile grid origin
-        double offsetX = w / 2.0 - centerX * TILE_SIZE;
-        double offsetY = h / 2.0 - centerY * TILE_SIZE;
-
-        // Visible tile range
-        int tileLeft = (int) Math.floor(-offsetX / TILE_SIZE);
-        int tileRight = (int) Math.floor((-offsetX + w) / TILE_SIZE);
-        int tileTop = (int) Math.floor(-offsetY / TILE_SIZE);
-        int tileBottom = (int) Math.floor((-offsetY + h) / TILE_SIZE);
-
-        for (int ty = tileTop; ty <= tileBottom; ty++) {
-            if (ty < 0 || ty >= (int) max) continue;
-            for (int tx = tileLeft; tx <= tileRight; tx++) {
-                // Wrap X for horizontal wrapping
-                int wrappedX = ((tx % (int) max) + (int) max) % (int) max;
-
-                double px = offsetX + tx * TILE_SIZE;
-                double py = offsetY + ty * TILE_SIZE;
-
-                Image tile = tileCache.getTile(zoom, wrappedX, ty);
-                if (tile != null) {
-                    gc.drawImage(tile, px, py, TILE_SIZE, TILE_SIZE);
-                } else {
-                    gc.setFill(Color.rgb(220, 220, 220));
-                    gc.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-                    gc.setStroke(Color.rgb(200, 200, 200));
-                    gc.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-                }
+    private void updateActiveDrawingLayer() {
+        LayerViewModel activeVM = layerStack.getActiveDrawingLayer();
+        DrawingLayerView activeView = null;
+        if (activeVM != null) {
+            javafx.scene.layout.Pane view = layerViewMap.get(activeVM);
+            if (view instanceof DrawingLayerView dlv) {
+                activeView = dlv;
             }
         }
+        inputOverlay.setActiveDrawingLayer(activeView);
+    }
 
-        // Draw lines and points using DrawingTool
-        drawingTool.render(gc, createCoordinateConverter());
+    private int getEffectiveMinZoom() {
+        return layerStack.getLayers().stream()
+            .filter(lvm -> lvm instanceof TileLayerViewModel)
+            .map(lvm -> ((TileLayerViewModel) lvm).getTileSource().getMinZoom())
+            .min(Integer::compare)
+            .orElse(0);
+    }
+
+    // --- Public API ---
+
+    public void setNavigationMode() { inputOverlay.setNavigationMode(); }
+    public void setDrawingMode()    { inputOverlay.setDrawingMode(); }
+
+    public void zoomIn()  { viewport.zoomIn(); }
+    public void zoomOut() { viewport.zoomOut(getEffectiveMinZoom()); }
+
+    public int getZoom()              { return viewport.getZoom(); }
+    public double[] getCenterLatLon() { return viewport.getCenterLatLon(); }
+
+    /**
+     * Registers a listener that fires whenever the map centre or zoom changes.
+     * Provided for backward compatibility; callers may alternatively listen to
+     * viewport properties directly.
+     */
+    public void setStateUpdateListener(Runnable listener) {
+        viewport.centerXProperty().addListener(obs -> listener.run());
+        viewport.centerYProperty().addListener(obs -> listener.run());
+        viewport.zoomProperty().addListener(obs -> listener.run());
     }
 
     public void shutdown() {
-        tileCache.shutdown();
-    }
-
-    public void setStateUpdateListener(Runnable listener) {
-        this.stateUpdateListener = listener;
-    }
-
-    private void notifyStateUpdate() {
-        if (stateUpdateListener != null) {
-            stateUpdateListener.run();
-        }
-    }
-
-    public void zoomIn() {
-        if (zoom < MAX_ZOOM) {
-            double lon = TileMath.tileXToLon(centerX, zoom);
-            double lat = TileMath.tileYToLat(centerY, zoom);
-            zoom++;
-            centerX = TileMath.lonToTileX(lon, zoom);
-            centerY = TileMath.latToTileY(lat, zoom);
-            clampCenter();
-            render();
-            notifyStateUpdate();
-        }
-    }
-
-    public void zoomOut() {
-        if (zoom > tileSource.getMinZoom()) {
-            double lon = TileMath.tileXToLon(centerX, zoom);
-            double lat = TileMath.tileYToLat(centerY, zoom);
-            zoom--;
-            centerX = TileMath.lonToTileX(lon, zoom);
-            centerY = TileMath.latToTileY(lat, zoom);
-            clampCenter();
-            render();
-            notifyStateUpdate();
-        }
-    }
-
-    public int getZoom() {
-        return zoom;
-    }
-
-    public double[] getCenterLatLon() {
-        double lon = TileMath.tileXToLon(centerX, zoom);
-        double lat = TileMath.tileYToLat(centerY, zoom);
-        return new double[]{lat, lon};
-    }
-
-    public void setNavigationMode() {
-        if (currentMode != OperationMode.NAVIGATION) {
-            currentMode = OperationMode.NAVIGATION;
-            // Clear any current line being drawn
-            drawingTool.abortCurrentLine();
-            render();
-            setCursor(Cursor.CLOSED_HAND);
-        }
-    }
-
-    public void setDrawingMode() {
-        if (currentMode != OperationMode.DRAWING) {
-            currentMode = OperationMode.DRAWING;
-            canvas.requestFocus();
-            render();
-            setCursor(Cursor.DEFAULT);
-        }
-    }
-
-    private void updateNavigationCursor() {
-        if (currentMode == OperationMode.NAVIGATION) {
-            Cursor desiredCursor = switch (drawingTool.getCursorType(lastMouseX, lastMouseY, createCoordinateConverter(), true)) {
-                case CLOSED_HAND -> Cursor.CLOSED_HAND;
-                case DEFAULT -> Cursor.DEFAULT;
-            };
-            if (getCursor() != desiredCursor) {
-                setCursor(desiredCursor);
-            }
-        }
-    }
-
-    private DrawingTool.CoordinateConverter createCoordinateConverter() {
-        double w = canvas.getWidth();
-        double h = canvas.getHeight();
-        return new DrawingTool.CoordinateConverter() {
-            @Override
-            public double[] latLonToScreen(double lat, double lon) {
-                return TileMath.latLonToScreen(lat, lon, zoom, centerX, centerY, w, h);
-            }
-
-            @Override
-            public double[] screenToLatLon(double screenX, double screenY) {
-                return TileMath.screenToLatLon(screenX, screenY, zoom, centerX, centerY, w, h);
-            }
-        };
+        layerViewMap.values().forEach(view -> {
+            if (view instanceof TileLayerView tlv) tlv.shutdown();
+        });
     }
 }

@@ -4,34 +4,67 @@ import com.johnreah.mapster.view.maptiles.GoogleSatelliteTileSource;
 import com.johnreah.mapster.view.maptiles.GoogleStreetMapsTileSource;
 import com.johnreah.mapster.view.maptiles.OrdnanceSurveyTileSource;
 import com.johnreah.mapster.view.maptiles.OsmTileSource;
+import com.johnreah.mapster.view.maptiles.TileMath;
 import com.johnreah.mapster.view.maptiles.TileSource;
+import com.johnreah.mapster.viewmodel.DrawingLayerViewModel;
+import com.johnreah.mapster.viewmodel.LayerStack;
+import com.johnreah.mapster.viewmodel.LayerViewModel;
+import com.johnreah.mapster.viewmodel.MapViewport;
+import com.johnreah.mapster.viewmodel.TileLayerViewModel;
 
+import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class MainWindow {
 
     private MapView mapView;
+    private MapViewport viewport;
+    private LayerStack layerStack;
+
     private Label centerLatLabel;
     private Label centerLonLabel;
     private Label zoomLabel;
 
     public void show(Stage stage) {
+        viewport = new MapViewport();
+        layerStack = new LayerStack();
+
         List<TileSource> sources = buildAvailableSources();
         TileSource defaultSource = sources.get(0);
 
-        mapView = new MapView(defaultSource);
+        TileLayerViewModel tileLayer = new TileLayerViewModel("tile-0", defaultSource.getDisplayName(), defaultSource);
+        layerStack.addLayer(tileLayer);
+
+        TileLayerViewModel satelliteLayer = new TileLayerViewModel(
+                "tile-satellite", "Google Satellite", new GoogleSatelliteTileSource());
+        layerStack.addLayer(satelliteLayer);
+
+        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource(
+                OrdnanceSurveyTileSource.ROAD_LAYER, OrdnanceSurveyTileSource.ROAD_DISPLAY_NAME);
+        if (osRoad.isAvailable()) {
+            layerStack.addLayer(new TileLayerViewModel("tile-os-road", osRoad.getDisplayName(), osRoad));
+        }
+
+        DrawingLayerViewModel drawingLayer = new DrawingLayerViewModel("drawing-0", "Drawing Layer");
+        layerStack.addLayer(drawingLayer);
+        layerStack.activeDrawingLayerProperty().set(drawingLayer);
+
+        mapView = new MapView(viewport, layerStack);
         mapView.setMinWidth(200);
 
-        MenuBar menuBar = buildMenuBar(sources, defaultSource);
+        MenuBar menuBar = buildMenuBar(sources, defaultSource, tileLayer);
         ToolBar toolBar = buildToolBar();
         VBox topArea = new VBox(menuBar, toolBar);
         VBox sidePanel = buildSidePanel();
@@ -51,7 +84,9 @@ public class MainWindow {
         stage.setScene(scene);
         stage.show();
 
-        mapView.setStateUpdateListener(this::updateState);
+        viewport.centerXProperty().addListener(obs -> updateState());
+        viewport.centerYProperty().addListener(obs -> updateState());
+        viewport.zoomProperty().addListener(obs -> updateState());
         updateState();
     }
 
@@ -67,15 +102,13 @@ public class MainWindow {
         sources.add(new GoogleStreetMapsTileSource());
         sources.add(new GoogleSatelliteTileSource());
 
-        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource(OrdnanceSurveyTileSource.ROAD_LAYER, OrdnanceSurveyTileSource.ROAD_DISPLAY_NAME);
-        if (osRoad.isAvailable()) {
-            sources.add(osRoad);
-        }
+        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource(
+            OrdnanceSurveyTileSource.ROAD_LAYER, OrdnanceSurveyTileSource.ROAD_DISPLAY_NAME);
+        if (osRoad.isAvailable()) sources.add(osRoad);
 
-        OrdnanceSurveyTileSource osOutdoor = new OrdnanceSurveyTileSource(OrdnanceSurveyTileSource.OUTDOOR_LAYER, OrdnanceSurveyTileSource.OUTDOOR_DISPLAY_NAME);
-        if (osOutdoor.isAvailable()) {
-            sources.add(osOutdoor);
-        }
+        OrdnanceSurveyTileSource osOutdoor = new OrdnanceSurveyTileSource(
+            OrdnanceSurveyTileSource.OUTDOOR_LAYER, OrdnanceSurveyTileSource.OUTDOOR_DISPLAY_NAME);
+        if (osOutdoor.isAvailable()) sources.add(osOutdoor);
 
         return sources;
     }
@@ -88,23 +121,74 @@ public class MainWindow {
         panel.setMaxWidth(500);
         panel.setPrefWidth(200);
 
-        Label titleLabel = new Label("Map Information");
-        titleLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        Label mapInfoTitle = new Label("Map Information");
+        mapInfoTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
         centerLatLabel = new Label("Latitude: -");
         centerLonLabel = new Label("Longitude: -");
         zoomLabel = new Label("Zoom: -");
 
-        panel.getChildren().addAll(titleLabel, new Separator(), centerLatLabel, centerLonLabel, zoomLabel);
+        VBox layerListPanel = buildLayerListPanel();
+
+        panel.getChildren().addAll(
+            mapInfoTitle, new Separator(),
+            centerLatLabel, centerLonLabel, zoomLabel,
+            new Separator(),
+            layerListPanel
+        );
 
         return panel;
     }
 
+    private VBox buildLayerListPanel() {
+        VBox panel = new VBox(6);
+
+        Label heading = new Label("Layers");
+        heading.setStyle("-fx-font-weight: bold;");
+        panel.getChildren().add(heading);
+
+        layerStack.getLayers().addListener((ListChangeListener<LayerViewModel>) c ->
+            rebuildLayerRows(panel));
+        rebuildLayerRows(panel);
+
+        return panel;
+    }
+
+    private void rebuildLayerRows(VBox panel) {
+        // Keep the heading (first child), replace the rest
+        javafx.scene.Node heading = panel.getChildren().get(0);
+        panel.getChildren().clear();
+        panel.getChildren().add(heading);
+
+        // Show layers top-first (reverse of stack order)
+        List<LayerViewModel> reversed = new ArrayList<>(layerStack.getLayers());
+        Collections.reverse(reversed);
+        for (LayerViewModel layer : reversed) {
+            panel.getChildren().add(buildLayerRow(layer));
+        }
+    }
+
+    private HBox buildLayerRow(LayerViewModel layer) {
+        CheckBox visibleCheck = new CheckBox();
+        visibleCheck.selectedProperty().bindBidirectional(layer.visibleProperty());
+
+        Label nameLabel = new Label(layer.getDisplayName());
+        nameLabel.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(nameLabel, Priority.ALWAYS);
+
+        Slider opacitySlider = new Slider(0.0, 1.0, layer.getOpacity());
+        opacitySlider.setPrefWidth(70);
+        opacitySlider.setTooltip(new Tooltip("Opacity"));
+        opacitySlider.valueProperty().bindBidirectional(layer.opacityProperty());
+
+        return new HBox(4, visibleCheck, nameLabel, opacitySlider);
+    }
+
     private void updateState() {
-        double[] center = mapView.getCenterLatLon();
+        double[] center = viewport.getCenterLatLon();
         centerLatLabel.setText(String.format("Latitude: %.6f", center[0]));
         centerLonLabel.setText(String.format("Longitude: %.6f", center[1]));
-        zoomLabel.setText("Zoom: " + mapView.getZoom());
+        zoomLabel.setText("Zoom: " + viewport.getZoom());
     }
 
     private ToolBar buildToolBar() {
@@ -113,22 +197,22 @@ public class MainWindow {
         Button zoomOutButton = new Button("\u2013");
         zoomOutButton.setOnAction(e -> mapView.zoomOut());
 
-        // Mode toggle buttons (radio-style)
         ToggleGroup modeGroup = new ToggleGroup();
 
-        ToggleButton navigationModeButton = new ToggleButton("\u2630"); // ☰ navigation icon
+        ToggleButton navigationModeButton = new ToggleButton("\u2630");
         navigationModeButton.setToggleGroup(modeGroup);
-        navigationModeButton.setSelected(true); // Default to navigation mode
+        navigationModeButton.setSelected(true);
         navigationModeButton.setOnAction(e -> mapView.setNavigationMode());
 
-        ToggleButton drawingModeButton = new ToggleButton("\u270E"); // ✎ pencil icon
+        ToggleButton drawingModeButton = new ToggleButton("\u270E");
         drawingModeButton.setToggleGroup(modeGroup);
         drawingModeButton.setOnAction(e -> mapView.setDrawingMode());
 
         return new ToolBar(zoomInButton, zoomOutButton, new Separator(), navigationModeButton, drawingModeButton);
     }
 
-    private MenuBar buildMenuBar(List<TileSource> sources, TileSource defaultSource) {
+    private MenuBar buildMenuBar(List<TileSource> sources, TileSource defaultSource,
+                                  TileLayerViewModel tileLayer) {
         Menu layersMenu = new Menu("Layers");
         ToggleGroup toggleGroup = new ToggleGroup();
 
@@ -136,7 +220,19 @@ public class MainWindow {
             RadioMenuItem item = new RadioMenuItem(source.getDisplayName());
             item.setToggleGroup(toggleGroup);
             item.setSelected(source == defaultSource);
-            item.setOnAction(e -> mapView.selectSource(source));
+            item.setOnAction(e -> {
+                tileLayer.setTileSource(source);
+                // Clamp zoom if the new source has a higher minimum zoom
+                if (viewport.getZoom() < source.getMinZoom()) {
+                    double[] latLon = viewport.getCenterLatLon();
+                    int newZoom = source.getMinZoom();
+                    viewport.zoomProperty().set(newZoom);
+                    viewport.moveTo(
+                        TileMath.lonToTileX(latLon[1], newZoom),
+                        TileMath.latToTileY(latLon[0], newZoom)
+                    );
+                }
+            });
             layersMenu.getItems().add(item);
         }
 
