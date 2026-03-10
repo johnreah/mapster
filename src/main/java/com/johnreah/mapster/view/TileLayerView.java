@@ -37,6 +37,7 @@ public class TileLayerView extends Pane {
 
         opacityProperty().bind(layerViewModel.opacityProperty());
         visibleProperty().bind(layerViewModel.visibleProperty());
+        layerViewModel.visibleProperty().addListener((obs, wasVisible, isVisible) -> { if (isVisible) render(); });
 
         tileCache = new TileCache(layerViewModel.getTileSource(), this::render);
 
@@ -53,6 +54,7 @@ public class TileLayerView extends Pane {
     }
 
     private void render() {
+        if (!layerViewModel.isVisible()) return;
         double w = canvas.getWidth();
         double h = canvas.getHeight();
         if (w <= 0 || h <= 0) return;
