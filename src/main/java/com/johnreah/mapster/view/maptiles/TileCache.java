@@ -33,7 +33,7 @@ public class TileCache {
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final HttpClient httpClient;
     private final Runnable onTileLoaded;
-    private final TileSource tileSource;
+    private volatile TileSource tileSource;
 
     public TileCache(TileSource tileSource, Runnable onTileLoaded) {
         this.tileSource = tileSource;
@@ -51,6 +51,14 @@ public class TileCache {
 
     public TileSource getTileSource() {
         return tileSource;
+    }
+
+    public void setTileSource(TileSource tileSource) {
+        this.tileSource = tileSource;
+        inflight.clear();
+        synchronized (cache) {
+            cache.clear();
+        }
     }
 
     public Image getTile(int zoom, int x, int y) {

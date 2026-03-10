@@ -1,17 +1,16 @@
 package com.johnreah.mapster.view;
 
 import com.johnreah.mapster.MapSession;
-import com.johnreah.mapster.util.TileSource;
 import com.johnreah.mapster.viewmodel.LayerStack;
 import com.johnreah.mapster.viewmodel.LayerViewModel;
 import com.johnreah.mapster.viewmodel.MapViewport;
-import com.johnreah.mapster.viewmodel.TileLayerViewModel;
 
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -36,14 +35,10 @@ public class MainWindow {
         viewport = session.viewport;
         layerStack = session.layerStack;
 
-        List<TileSource> sources = session.availableSources;
-        TileSource defaultSource = sources.get(0);
-        TileLayerViewModel tileLayer = session.baseTileLayer;
-
         mapView = new MapView(viewport, layerStack);
         mapView.setMinWidth(200);
 
-        MenuBar menuBar = buildMenuBar(sources, defaultSource, tileLayer);
+        MenuBar menuBar = buildMenuBar(stage);
         ToolBar toolBar = buildToolBar();
         VBox topArea = new VBox(menuBar, toolBar);
         VBox sidePanel = buildSidePanel();
@@ -173,21 +168,15 @@ public class MainWindow {
         return new ToolBar(zoomInButton, zoomOutButton, new Separator(), navigationModeButton, drawingModeButton);
     }
 
-    private MenuBar buildMenuBar(List<TileSource> sources, TileSource defaultSource,
-                                  TileLayerViewModel tileLayer) {
-        Menu layersMenu = new Menu("Layers");
-        ToggleGroup toggleGroup = new ToggleGroup();
+    private MenuBar buildMenuBar(Stage stage) {
+        MenuItem exitItem = new MenuItem("E_xit");
+        exitItem.setOnAction(e -> stage.close());
 
-        for (TileSource source : sources) {
-            RadioMenuItem item = new RadioMenuItem(source.getDisplayName());
-            item.setToggleGroup(toggleGroup);
-            item.setSelected(source == defaultSource);
-            item.setOnAction(e -> tileLayer.setTileSource(source));
-            layersMenu.getItems().add(item);
-        }
+        Menu fileMenu = new Menu("_File");
+        fileMenu.getItems().add(exitItem);
 
         MenuBar menuBar = new MenuBar();
-        menuBar.getMenus().add(layersMenu);
+        menuBar.getMenus().add(fileMenu);
         return menuBar;
     }
 }
