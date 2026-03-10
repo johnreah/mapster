@@ -1,6 +1,7 @@
 package com.johnreah.mapster.view;
 
 import com.johnreah.mapster.util.TileMath;
+import com.johnreah.mapster.viewmodel.CoordinateConverter;
 import com.johnreah.mapster.viewmodel.DrawingLayerViewModel;
 import com.johnreah.mapster.viewmodel.DrawingTool;
 import com.johnreah.mapster.viewmodel.MapViewport;
@@ -53,7 +54,7 @@ public class DrawingLayerView extends Pane {
         GraphicsContext gc = canvas.getGraphicsContext2D();
         gc.clearRect(0, 0, w, h);
         DrawingTool tool = layerViewModel.getDrawingTool();
-        DrawingTool.CoordinateConverter converter = createCoordinateConverter();
+        CoordinateConverter converter = createCoordinateConverter();
 
         // Draw completed lines and their points
         renderLines(gc, tool.getCompletedLines(), Color.BLUE, 2.0, converter);
@@ -87,7 +88,7 @@ public class DrawingLayerView extends Pane {
     }
 
     private void renderLines(GraphicsContext gc, List<List<double[]>> lines, Color color, double lineWidth,
-                             DrawingTool.CoordinateConverter converter) {
+                             CoordinateConverter converter) {
         gc.setStroke(color);
         gc.setLineWidth(lineWidth);
         for (List<double[]> line : lines) {
@@ -142,13 +143,13 @@ public class DrawingLayerView extends Pane {
         layerViewModel.getDrawingTool().abortCurrentLine();
     }
 
-    private DrawingTool.CoordinateConverter createCoordinateConverter() {
+    private CoordinateConverter createCoordinateConverter() {
         double w = canvas.getWidth();
         double h = canvas.getHeight();
         int zoom = viewport.getZoom();
         double cx = viewport.getCenterX();
         double cy = viewport.getCenterY();
-        return new DrawingTool.CoordinateConverter() {
+        return new CoordinateConverter() {
             @Override
             public double[] latLonToScreen(double lat, double lon) {
                 return TileMath.latLonToScreen(lat, lon, zoom, cx, cy, w, h);

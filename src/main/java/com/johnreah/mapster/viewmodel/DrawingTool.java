@@ -221,11 +221,4 @@ public class DrawingTool {
         return !currentLinePoints.isEmpty();
     }
 
-    /**
-     * Interface for coordinate conversion between screen and geographic coordinates.
-     */
-    public interface CoordinateConverter {
-        double[] latLonToScreen(double lat, double lon);
-        double[] screenToLatLon(double screenX, double screenY);
-    }
 }
