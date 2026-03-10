@@ -9,15 +9,15 @@
 ## Layers and Responsibilities
 
 - **`App`** — JavaFX entry point only. Builds the scene graph, wires up UI components, and delegates everything else. No map logic here.
-- **`MapView`** — Rendering and input handling for the map canvas. Owns the operation mode state (`NAVIGATION` / `DRAWING`). Does not contain tile fetching, caching, or drawing logic — it delegates those to `TileCache` and `DrawingTool`.
+- **`MapView`** — Container for all map layer views. Manages a `StackPane` of `TileLayerView` and `DrawingLayerView` instances, with an `InputOverlayPane` on top. Does not contain tile fetching, caching, or drawing logic.
 - **`TileCache`** (`view.maptiles`) — All tile fetching and caching. Network requests run on a background `ExecutorService`; UI updates use `Platform.runLater`. Handles both memory cache (LRU, 512 entries) and disk cache (`~/.mapster/tiles/`).
-- **`TileMath`** (`view.maptiles`) — Pure static utility for Web Mercator coordinate conversions. No state, no dependencies.
-- **`DrawingTool`** — All drawing state and behaviour (current line, completed lines, point editing/dragging). Stateful but not a JavaFX node. Communicates with `MapView` via the `CoordinateConverter` interface.
-- **`TileSource` (interface)** (`view.maptiles`) — Contract for tile providers: URL template, zoom range, attribution, availability check.
+- **`TileMath`** (`util`) — Pure static utility for Web Mercator coordinate conversions. No state, no dependencies.
+- **`DrawingTool`** — All drawing state and behaviour (current line, completed lines, point editing/dragging). Stateful but not a JavaFX node. No JavaFX dependencies. Communicates with `DrawingLayerView` via the `CoordinateConverter` interface.
+- **`TileSource` (interface)** (`util`) — Contract for tile providers: URL template, zoom range, attribution, availability check.
 
 ## TileSource Implementations
 
-All tile providers implement `TileSource` and live in `view.maptiles`. The pattern is:
+All tile providers implement `TileSource` (`util`) and live in `view.maptiles`. The pattern is:
 - `getId()` returns a stable, filesystem-safe string used as the disk cache directory name.
 - `isAvailable()` returns false when a required API key or environment variable is absent (e.g. Ordnance Survey).
 - Never hardcode tile URLs — they belong in the implementing class, not in `MapView` or `TileCache`.
@@ -26,7 +26,7 @@ All tile providers implement `TileSource` and live in `view.maptiles`. The patte
 
 - All network I/O happens on `TileCache`'s background `ExecutorService` (2 threads).
 - `Platform.runLater` is the only way to trigger a re-render from a background thread — via the `onTileLoaded` callback injected into `TileCache`.
-- `MapView.render()` is always called on the JavaFX Application Thread.
+- Layer renders (`TileLayerView.render()`, `DrawingLayerView.render()`) are always called on the JavaFX Application Thread.
 
 ## Coordinate System
 
@@ -37,11 +37,11 @@ All tile providers implement `TileSource` and live in `view.maptiles`. The patte
 ## Drawing / Editing
 
 - Drawing tools are encapsulated in `DrawingTool`, not embedded in `MapView`.
-- `MapView` creates a fresh `CoordinateConverter` per render/event and passes it into `DrawingTool`. Do not cache coordinate converters between renders.
-- The two modes (`NAVIGATION`, `DRAWING`) are an enum inside `MapView`. Mode transitions abort any in-progress line via `drawingTool.abortCurrentLine()`.
+- `DrawingLayerView` creates a fresh `CoordinateConverter` per render/event and passes it into `DrawingTool`. Do not cache coordinate converters between renders.
+- The two modes (`NAVIGATION`, `DRAWING`) are an enum inside `InputOverlayPane`. Mode transitions abort any in-progress line via `drawingTool.abortCurrentLine()`.
 
 ## Zoom
 
-- Global max zoom is 20 (constant in `MapView`).
+- Global max zoom is 20 (`MapViewport.MAX_ZOOM`).
 - Each `TileSource` declares its own `getMinZoom()` and `getMaxZoom()`. `TileCache` scales tiles from the source's max zoom when the display zoom exceeds it.
 - Zoom changes must preserve the geographic point under the cursor (or center for toolbar buttons).

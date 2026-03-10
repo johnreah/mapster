@@ -1,6 +1,6 @@
 package com.johnreah.mapster.viewmodel;
 
-import com.johnreah.mapster.view.maptiles.TileMath;
+import com.johnreah.mapster.util.TileMath;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleDoubleProperty;
@@ -82,6 +82,13 @@ public class MapViewport {
     /** Force a specific zoom level, preserving the current geographic centre. */
     public void setZoom(int newZoom) {
         changeZoom(newZoom);
+    }
+
+    /** Clamp zoom up to at least {@code minZoom}, preserving the geographic centre. */
+    public void ensureMinZoom(int minZoom) {
+        if (zoom.get() < minZoom) {
+            changeZoom(minZoom);
+        }
     }
 
     /** Returns [lat, lon] of the current map centre. */

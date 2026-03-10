@@ -1,9 +1,7 @@
 package com.johnreah.mapster.viewmodel;
 
-import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
-
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -20,6 +18,17 @@ public class DrawingTool {
     private List<List<double[]>> completedLines = new ArrayList<>();
     private double currentMouseX = 0;
     private double currentMouseY = 0;
+
+    private Runnable onChanged;
+
+    /** Registers a callback invoked whenever drawing state changes and a re-render is needed. */
+    public void setOnChanged(Runnable onChanged) {
+        this.onChanged = onChanged;
+    }
+
+    private void notifyChanged() {
+        if (onChanged != null) onChanged.run();
+    }
 
     // Editing state
     private int selectedLineIndex = -1;
@@ -61,6 +70,7 @@ public class DrawingTool {
         // Update mouse position so preview line is correct
         currentMouseX = screenX;
         currentMouseY = screenY;
+        notifyChanged();
     }
 
     /**
@@ -72,6 +82,7 @@ public class DrawingTool {
         if (!currentLinePoints.isEmpty()) {
             currentMouseX = screenX;
             currentMouseY = screenY;
+            notifyChanged();
         }
     }
 
@@ -80,6 +91,7 @@ public class DrawingTool {
      */
     public void abortCurrentLine() {
         currentLinePoints.clear();
+        notifyChanged();
     }
 
     /**
@@ -159,6 +171,7 @@ public class DrawingTool {
             double[] newLatLon = converter.screenToLatLon(screenX, screenY);
             completedLines.get(selectedLineIndex).get(selectedPointIndex)[0] = newLatLon[0];
             completedLines.get(selectedLineIndex).get(selectedPointIndex)[1] = newLatLon[1];
+            notifyChanged();
         }
     }
 
@@ -189,60 +202,16 @@ public class DrawingTool {
         }
     }
 
-    /**
-     * Render all lines on the canvas.
-     * @param gc Graphics context
-     * @param converter Coordinate converter
-     */
-    public void render(GraphicsContext gc, CoordinateConverter converter) {
-        // Draw completed lines
-        renderLines(gc, completedLines, Color.BLUE, 2.0, converter);
-
-        // Draw points on completed lines
-        gc.setFill(Color.BLUE);
-        for (List<double[]> line : completedLines) {
-            for (double[] point : line) {
-                double[] screenPos = converter.latLonToScreen(point[0], point[1]);
-                gc.fillOval(screenPos[0] - 4, screenPos[1] - 4, 8, 8);
-            }
-        }
-
-        // Draw current line being drawn
-        if (!currentLinePoints.isEmpty()) {
-            List<List<double[]>> currentLineAsList = new ArrayList<>();
-            currentLineAsList.add(currentLinePoints);
-            renderLines(gc, currentLineAsList, Color.RED, 3.0, converter);
-
-            // Draw preview line from last point to current mouse position
-            double[] lastPoint = currentLinePoints.get(currentLinePoints.size() - 1);
-            double[] lastScreenPos = converter.latLonToScreen(lastPoint[0], lastPoint[1]);
-            gc.setStroke(Color.rgb(255, 100, 100, 0.6));
-            gc.setLineWidth(2.0);
-            gc.strokeLine(lastScreenPos[0], lastScreenPos[1], currentMouseX, currentMouseY);
-
-            // Draw points
-            gc.setFill(Color.RED);
-            for (double[] point : currentLinePoints) {
-                double[] screenPos = converter.latLonToScreen(point[0], point[1]);
-                gc.fillOval(screenPos[0] - 4, screenPos[1] - 4, 8, 8);
-            }
-        }
+    public List<List<double[]>> getCompletedLines() {
+        return Collections.unmodifiableList(completedLines);
     }
 
-    private void renderLines(GraphicsContext gc, List<List<double[]>> lines, Color color, double lineWidth, CoordinateConverter converter) {
-        gc.setStroke(color);
-        gc.setLineWidth(lineWidth);
-
-        for (List<double[]> line : lines) {
-            if (line.size() < 2) continue;
-
-            for (int i = 0; i < line.size() - 1; i++) {
-                double[] p1 = converter.latLonToScreen(line.get(i)[0], line.get(i)[1]);
-                double[] p2 = converter.latLonToScreen(line.get(i + 1)[0], line.get(i + 1)[1]);
-                gc.strokeLine(p1[0], p1[1], p2[0], p2[1]);
-            }
-        }
+    public List<double[]> getCurrentLinePoints() {
+        return Collections.unmodifiableList(currentLinePoints);
     }
+
+    public double getCurrentMouseX() { return currentMouseX; }
+    public double getCurrentMouseY() { return currentMouseY; }
 
     public boolean isDraggingPoint() {
         return isDraggingPoint;

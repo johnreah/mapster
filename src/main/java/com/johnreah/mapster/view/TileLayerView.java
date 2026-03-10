@@ -1,8 +1,8 @@
 package com.johnreah.mapster.view;
 
 import com.johnreah.mapster.view.maptiles.TileCache;
-import com.johnreah.mapster.view.maptiles.TileMath;
-import com.johnreah.mapster.view.maptiles.TileSource;
+import com.johnreah.mapster.util.TileMath;
+import com.johnreah.mapster.util.TileSource;
 import com.johnreah.mapster.viewmodel.MapViewport;
 import com.johnreah.mapster.viewmodel.TileLayerViewModel;
 

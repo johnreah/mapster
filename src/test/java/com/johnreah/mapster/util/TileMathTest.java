@@ -1,4 +1,4 @@
-package com.johnreah.mapster.view.maptiles;
+package com.johnreah.mapster.util;
 
 import org.junit.jupiter.api.Test;
 

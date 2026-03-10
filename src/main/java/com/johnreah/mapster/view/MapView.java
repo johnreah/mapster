@@ -64,7 +64,7 @@ public class MapView extends StackPane {
         });
 
         updateActiveDrawingLayer();
-        inputOverlay.setMinZoom(getEffectiveMinZoom());
+        inputOverlay.setMinZoom(layerStack.getEffectiveMinZoom());
     }
 
     private javafx.scene.layout.Pane createLayerView(LayerViewModel lvm) {
@@ -88,35 +88,16 @@ public class MapView extends StackPane {
         inputOverlay.setActiveDrawingLayer(activeView);
     }
 
-    private int getEffectiveMinZoom() {
-        return layerStack.getLayers().stream()
-            .filter(lvm -> lvm instanceof TileLayerViewModel)
-            .map(lvm -> ((TileLayerViewModel) lvm).getTileSource().getMinZoom())
-            .min(Integer::compare)
-            .orElse(0);
-    }
-
     // --- Public API ---
 
     public void setNavigationMode() { inputOverlay.setNavigationMode(); }
     public void setDrawingMode()    { inputOverlay.setDrawingMode(); }
 
     public void zoomIn()  { viewport.zoomIn(); }
-    public void zoomOut() { viewport.zoomOut(getEffectiveMinZoom()); }
+    public void zoomOut() { viewport.zoomOut(layerStack.getEffectiveMinZoom()); }
 
     public int getZoom()              { return viewport.getZoom(); }
     public double[] getCenterLatLon() { return viewport.getCenterLatLon(); }
-
-    /**
-     * Registers a listener that fires whenever the map centre or zoom changes.
-     * Provided for backward compatibility; callers may alternatively listen to
-     * viewport properties directly.
-     */
-    public void setStateUpdateListener(Runnable listener) {
-        viewport.centerXProperty().addListener(obs -> listener.run());
-        viewport.centerYProperty().addListener(obs -> listener.run());
-        viewport.zoomProperty().addListener(obs -> listener.run());
-    }
 
     public void shutdown() {
         layerViewMap.values().forEach(view -> {

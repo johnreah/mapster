@@ -1,5 +1,6 @@
 package com.johnreah.mapster.view.maptiles;
 
+import com.johnreah.mapster.util.TileSource;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

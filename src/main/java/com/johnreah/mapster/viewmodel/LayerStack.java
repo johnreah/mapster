@@ -45,4 +45,13 @@ public class LayerStack {
             layers.add(idx - 1, layer);
         }
     }
+
+    /** Returns the minimum zoom level across all tile layers, or 0 if none exist. */
+    public int getEffectiveMinZoom() {
+        return layers.stream()
+                .filter(lvm -> lvm instanceof TileLayerViewModel)
+                .mapToInt(lvm -> ((TileLayerViewModel) lvm).getMinZoom())
+                .min()
+                .orElse(0);
+    }
 }

@@ -1,6 +1,6 @@
 package com.johnreah.mapster.viewmodel;
 
-import com.johnreah.mapster.view.maptiles.TileSource;
+import com.johnreah.mapster.util.TileSource;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 
@@ -20,4 +20,5 @@ public class TileLayerViewModel extends LayerViewModel {
     public ObjectProperty<TileSource> tileSourceProperty() { return tileSource; }
     public TileSource getTileSource() { return tileSource.get(); }
     public void setTileSource(TileSource source) { tileSource.set(source); }
+    public int getMinZoom() { return tileSource.get().getMinZoom(); }
 }

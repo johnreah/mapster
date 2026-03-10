@@ -1,5 +1,7 @@
 package com.johnreah.mapster.view.maptiles;
 
+import com.johnreah.mapster.util.TileSource;
+
 public class GoogleSatelliteTileSource implements TileSource {
 
     @Override

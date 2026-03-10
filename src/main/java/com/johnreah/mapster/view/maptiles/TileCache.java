@@ -1,5 +1,7 @@
 package com.johnreah.mapster.view.maptiles;
 
+import com.johnreah.mapster.util.TileMath;
+import com.johnreah.mapster.util.TileSource;
 import javafx.application.Platform;
 import javafx.scene.image.Image;
 import javafx.scene.image.PixelFormat;
@@ -31,7 +33,7 @@ public class TileCache {
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final HttpClient httpClient;
     private final Runnable onTileLoaded;
-    private volatile TileSource tileSource;
+    private final TileSource tileSource;
 
     public TileCache(TileSource tileSource, Runnable onTileLoaded) {
         this.tileSource = tileSource;
@@ -49,10 +51,6 @@ public class TileCache {
 
     public TileSource getTileSource() {
         return tileSource;
-    }
-
-    public void setTileSource(TileSource tileSource) {
-        this.tileSource = tileSource;
     }
 
     public Image getTile(int zoom, int x, int y) {
@@ -82,26 +80,22 @@ public class TileCache {
             int effectiveY = y / divisor;
             String effectiveKey = source.getId() + "/" + effectiveZoom + "/" + effectiveX + "/" + effectiveY;
             if (inflight.add(effectiveKey)) {
-                executor.submit(() -> fetchTile(source, effectiveKey, effectiveZoom, effectiveX, effectiveY));
+                executor.submit(() -> loadTile(source, effectiveKey, effectiveZoom, effectiveX, effectiveY));
             }
             return null;
         }
 
-        // Normal flow for supported zoom levels
-        Image diskImg = loadFromDisk(source, zoom, x, y);
-        if (diskImg != null) {
-            synchronized (cache) {
-                cache.put(key, diskImg);
-            }
-            return diskImg;
-        }
+        // Normal flow: load from disk or network on background thread
         if (inflight.add(key)) {
-            executor.submit(() -> fetchTile(source, key, zoom, x, y));
+            executor.submit(() -> loadTile(source, key, zoom, x, y));
         }
         return null;
     }
 
     private Image getScaledTile(TileSource source, int requestedZoom, int x, int y) {
+        if (!Platform.isFxApplicationThread()) {
+            throw new IllegalStateException("getScaledTile() must be called on the JavaFX Application Thread");
+        }
         int effectiveZoom = source.getMaxZoom();
         int zoomDiff = requestedZoom - effectiveZoom;
         int divisor = 1 << zoomDiff;
@@ -118,16 +112,6 @@ public class TileCache {
         }
 
         if (parentTile == null) {
-            // Try loading from disk
-            parentTile = loadFromDisk(source, effectiveZoom, parentX, parentY);
-            if (parentTile != null) {
-                synchronized (cache) {
-                    cache.put(parentKey, parentTile);
-                }
-            }
-        }
-
-        if (parentTile == null) {
             return null;
         }
 
@@ -136,7 +120,9 @@ public class TileCache {
         int subY = y % divisor;
         int tileSize = TileMath.TILE_SIZE;
 
-        // Scale the sub-region to a full tile via pixel manipulation (no FX thread required)
+        // Scale the sub-region to a full tile via pixel manipulation.
+        // NOTE: WritableImage is a JavaFX class. This method is only called from getTile(),
+        // which is called from TileLayerView.render() on the JavaFX Application Thread.
         int[] pixels = new int[tileSize * tileSize];
         var reader = parentTile.getPixelReader();
         for (int dy = 0; dy < tileSize; dy++) {
@@ -152,38 +138,45 @@ public class TileCache {
         return scaled;
     }
 
-    private void fetchTile(TileSource source, String key, int zoom, int x, int y) {
+    private void loadTile(TileSource source, String key, int zoom, int x, int y) {
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(source.getTileUrl(zoom, x, y)))
-                    .header("User-Agent", "Mapster/1.0")
-                    .GET()
-                    .build();
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() == 200) {
-                byte[] bytes = response.body();
-                writeToDisk(source, zoom, x, y, bytes);
-                Image img = new Image(new ByteArrayInputStream(bytes));
-                synchronized (cache) {
-                    cache.put(key, img);
+            byte[] bytes = readBytesFromDisk(source, zoom, x, y);
+            if (bytes == null) {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(source.getTileUrl(zoom, x, y)))
+                        .header("User-Agent", "Mapster/1.0")
+                        .GET()
+                        .build();
+                HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                if (response.statusCode() == 200) {
+                    bytes = response.body();
+                    writeToDisk(source, zoom, x, y, bytes);
                 }
-                Platform.runLater(onTileLoaded);
+            }
+            if (bytes != null) {
+                final byte[] finalBytes = bytes;
+                Platform.runLater(() -> {
+                    Image img = new Image(new ByteArrayInputStream(finalBytes));
+                    synchronized (cache) {
+                        cache.put(key, img);
+                    }
+                    onTileLoaded.run();
+                });
             }
         } catch (Exception e) {
-            // Tile load failed — will be retried on next render
+            // Load failed — will be retried on next render
         } finally {
             inflight.remove(key);
         }
     }
 
-    private Image loadFromDisk(TileSource source, int zoom, int x, int y) {
+    private byte[] readBytesFromDisk(TileSource source, int zoom, int x, int y) {
         Path file = DISK_CACHE_DIR.resolve(source.getId() + "/" + zoom + "/" + x + "/" + y + ".png");
         try {
             if (Files.exists(file)) {
                 long age = System.currentTimeMillis() - Files.getLastModifiedTime(file).toMillis();
                 if (age < TILE_MAX_AGE_MS) {
-                    byte[] bytes = Files.readAllBytes(file);
-                    return new Image(new ByteArrayInputStream(bytes));
+                    return Files.readAllBytes(file);
                 }
             }
         } catch (IOException e) {

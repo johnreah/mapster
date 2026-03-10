@@ -1,5 +1,7 @@
 package com.johnreah.mapster.view.maptiles;
 
+import com.johnreah.mapster.util.TileSource;
+
 public class OrdnanceSurveyTileSource implements TileSource {
 
     public static final String ROAD_LAYER = "Road_3857";
@@ -12,6 +14,9 @@ public class OrdnanceSurveyTileSource implements TileSource {
     private final String apiKey;
 
     public OrdnanceSurveyTileSource(String layer, String displayName) {
+        if (!layer.matches("[A-Za-z0-9_]+")) {
+            throw new IllegalArgumentException("Layer name must contain only alphanumeric characters and underscores: " + layer);
+        }
         this.layer = layer;
         this.displayName = displayName;
         this.apiKey = System.getenv("OS_API_KEY");
@@ -41,7 +46,7 @@ public class OrdnanceSurveyTileSource implements TileSource {
 
     @Override
     public int getMinZoom() {
-        return 0;
+        return 7;
     }
 
     @Override

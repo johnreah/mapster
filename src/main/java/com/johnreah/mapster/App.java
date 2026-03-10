@@ -12,7 +12,7 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
         mainWindow = new MainWindow();
-        mainWindow.show(stage);
+        mainWindow.show(stage, MapSession.create());
     }
 
     @Override

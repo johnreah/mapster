@@ -1,12 +1,7 @@
 package com.johnreah.mapster.view;
 
-import com.johnreah.mapster.view.maptiles.GoogleSatelliteTileSource;
-import com.johnreah.mapster.view.maptiles.GoogleStreetMapsTileSource;
-import com.johnreah.mapster.view.maptiles.OrdnanceSurveyTileSource;
-import com.johnreah.mapster.view.maptiles.OsmTileSource;
-import com.johnreah.mapster.view.maptiles.TileMath;
-import com.johnreah.mapster.view.maptiles.TileSource;
-import com.johnreah.mapster.viewmodel.DrawingLayerViewModel;
+import com.johnreah.mapster.MapSession;
+import com.johnreah.mapster.util.TileSource;
 import com.johnreah.mapster.viewmodel.LayerStack;
 import com.johnreah.mapster.viewmodel.LayerViewModel;
 import com.johnreah.mapster.viewmodel.MapViewport;
@@ -37,29 +32,13 @@ public class MainWindow {
     private Label centerLonLabel;
     private Label zoomLabel;
 
-    public void show(Stage stage) {
-        viewport = new MapViewport();
-        layerStack = new LayerStack();
+    public void show(Stage stage, MapSession session) {
+        viewport = session.viewport;
+        layerStack = session.layerStack;
 
-        List<TileSource> sources = buildAvailableSources();
+        List<TileSource> sources = session.availableSources;
         TileSource defaultSource = sources.get(0);
-
-        TileLayerViewModel tileLayer = new TileLayerViewModel("tile-0", defaultSource.getDisplayName(), defaultSource);
-        layerStack.addLayer(tileLayer);
-
-        TileLayerViewModel satelliteLayer = new TileLayerViewModel(
-                "tile-satellite", "Google Satellite", new GoogleSatelliteTileSource());
-        layerStack.addLayer(satelliteLayer);
-
-        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource(
-                OrdnanceSurveyTileSource.ROAD_LAYER, OrdnanceSurveyTileSource.ROAD_DISPLAY_NAME);
-        if (osRoad.isAvailable()) {
-            layerStack.addLayer(new TileLayerViewModel("tile-os-road", osRoad.getDisplayName(), osRoad));
-        }
-
-        DrawingLayerViewModel drawingLayer = new DrawingLayerViewModel("drawing-0", "Drawing Layer");
-        layerStack.addLayer(drawingLayer);
-        layerStack.activeDrawingLayerProperty().set(drawingLayer);
+        TileLayerViewModel tileLayer = session.baseTileLayer;
 
         mapView = new MapView(viewport, layerStack);
         mapView.setMinWidth(200);
@@ -94,23 +73,6 @@ public class MainWindow {
         if (mapView != null) {
             mapView.shutdown();
         }
-    }
-
-    private List<TileSource> buildAvailableSources() {
-        List<TileSource> sources = new ArrayList<>();
-        sources.add(new OsmTileSource());
-        sources.add(new GoogleStreetMapsTileSource());
-        sources.add(new GoogleSatelliteTileSource());
-
-        OrdnanceSurveyTileSource osRoad = new OrdnanceSurveyTileSource(
-            OrdnanceSurveyTileSource.ROAD_LAYER, OrdnanceSurveyTileSource.ROAD_DISPLAY_NAME);
-        if (osRoad.isAvailable()) sources.add(osRoad);
-
-        OrdnanceSurveyTileSource osOutdoor = new OrdnanceSurveyTileSource(
-            OrdnanceSurveyTileSource.OUTDOOR_LAYER, OrdnanceSurveyTileSource.OUTDOOR_DISPLAY_NAME);
-        if (osOutdoor.isAvailable()) sources.add(osOutdoor);
-
-        return sources;
     }
 
     private VBox buildSidePanel() {
@@ -220,19 +182,7 @@ public class MainWindow {
             RadioMenuItem item = new RadioMenuItem(source.getDisplayName());
             item.setToggleGroup(toggleGroup);
             item.setSelected(source == defaultSource);
-            item.setOnAction(e -> {
-                tileLayer.setTileSource(source);
-                // Clamp zoom if the new source has a higher minimum zoom
-                if (viewport.getZoom() < source.getMinZoom()) {
-                    double[] latLon = viewport.getCenterLatLon();
-                    int newZoom = source.getMinZoom();
-                    viewport.zoomProperty().set(newZoom);
-                    viewport.moveTo(
-                        TileMath.lonToTileX(latLon[1], newZoom),
-                        TileMath.latToTileY(latLon[0], newZoom)
-                    );
-                }
-            });
+            item.setOnAction(e -> tileLayer.setTileSource(source));
             layersMenu.getItems().add(item);
         }
 
